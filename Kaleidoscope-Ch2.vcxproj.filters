@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="E:\llvm-6.0.1.src\llvm-6.0.1.src\examples\Kaleidoscope\Chapter2\toy.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="E:\llvm-6.0.1.src\llvm-6.0.1.src\examples\Kaleidoscope\Chapter2\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="E:\llvm-6.0.1.src\llvm-6.0.1.src\resources\windows_version_resource.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{481B22AE-53BA-312B-88F5-479FE80B175A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{651AF614-1CF2-3AAD-A1D7-7BCE25EF0851}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
