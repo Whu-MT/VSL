@@ -1,4 +1,4 @@
-语法分析器分工
+语法分析器分工（函数申明，函数定义，表达式)
 
 黄山：ParseDecAST,DecAST，ParseWhileStatAST,WhileStatAST,ParseIfStatAST,IfStatAST,ParseNullStatAST,NullStatAST,ParseRetStatAST,RetStatAST,ParseAssStatAST,AssStatAST,CallExprAST,ParseNegExpr,NegExprAST
 杨欢：ParseProgramAST,ProgramAST,ParseFunc,FunctionAST,ParsePrototype,PrototypeAST,ParseNegExpr,ParseParenExpr,ParseNumberExpr,LogError,getNextToken,NumberExprAST
