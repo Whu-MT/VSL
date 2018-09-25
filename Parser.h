@@ -109,3 +109,84 @@ static std::unique_ptr<ExprAST> ParseExpression() {
 
 	return ParseBinOpRHS(0, std::move(LHS));
 }
+
+// numberexpr ::= number
+static std::unique_ptr<ExprAST> ParseNumberExpr() {
+	auto Result = llvm::make_unique<NumberExprAST>(NumVal);
+	//略过数字获取下一个输入
+	getNextToken(); 
+	return std::move(Result);
+}
+
+//prototype ::= VARIABLE '(' parameter_list ')'
+static std::unique_ptr<PrototypeAST> ParsePrototype() {
+	if (CurTok != VARIABLE)
+		return LogErrorP("Expected function name in prototype");
+
+	std::string FnName = IdentifierStr;
+	getNextToken();
+
+	if (CurTok != '(')
+		return LogErrorP("Expected '(' in prototype");
+
+	std::vector<std::string> ArgNames;
+	while (getNextToken() == VARIABLE)
+	{
+		ArgNames.push_back(IdentifierStr);
+		getNextToken();
+		if (CurTok != ',')
+			break;
+	}
+	if (CurTok != ')')
+		return LogErrorP("Expected ')' in prototype");
+
+	// success.
+	getNextToken(); // eat ')'.
+
+	return llvm::make_unique<PrototypeAST>(FnName, std::move(ArgNames));
+}
+
+//function ::= FUNC prototype '{' statement '}'
+static std::unique_ptr<FunctionAST> ParseFunc()
+{
+	getNextToken(); // eat FUNC.
+	auto Proto = ParsePrototype();
+	if (!Proto)
+		return nullptr;
+	if (CurTok != '{')
+		return LogErrorP("Expected '{' in function");
+	getNextToken();
+
+	auto E = ParseStatement();
+	if (!E)
+		return nullptr;
+	if (CurTok != '}')
+		return LogErrorP("Expected '}' in function");
+
+	return llvm::make_unique<FunctionAST>(std::move(Proto), std::move(E));
+}
+
+//解析括号中的表达式
+static std::unique_ptr<ExprAST> ParseParenExpr() {
+	// 过滤'('
+	getNextToken(); 
+	auto V = ParseExpression();
+	if (!V)
+		return nullptr;
+
+	if (CurTok != ')')
+		return LogError("expected ')'");
+	// 过滤')'
+	getNextToken(); 
+	return V;
+}
+
+//错误信息打印
+std::unique_ptr<ExprAST> LogError(const char *Str) {
+	fprintf(stderr, "Error: %s\n", Str);
+	return nullptr;
+}
+std::unique_ptr<PrototypeAST> LogErrorP(const char *Str) {
+	LogError(Str);
+	return nullptr;
+}
