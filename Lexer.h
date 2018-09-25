@@ -1,5 +1,18 @@
+#ifndef __LEXER_H__
+#define __LEXER_H__
 #include <cctype>
 #include <cstdio>
+#include <string>
+#include <cstdlib>
+#include <algorithm>
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
+#include "llvm/ADT/STLExtras.h"
 
 enum Token
 {
@@ -23,8 +36,8 @@ enum Token
 	VAR = -18,
 };
 
-static std:string IdentifierStr;
-static double NumberVal;
+static std::string IdentifierStr;
+static int NumberVal;
 
 /*
 *返回输入单词类型
@@ -81,7 +94,7 @@ static int gettok()
 			LastChar = getchar();
 		}while(isdigit(LastChar));
 
-		NumberVal = strtoi(NumberVal.c_str, nullptr);
+		NumberVal = atoi(IdentifierStr.c_str());
 		return INTEGER;
 	}
 
@@ -122,3 +135,5 @@ static int gettok()
 
 	return tmpChar;
 }
+
+#endif

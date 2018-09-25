@@ -1,17 +1,18 @@
+#ifndef __PARSER_H__
+#define __PARSER_H__
 #include "Lexer.h"
 #include "AST.h"
-#include "llvm/ADT/STLExtras.h"
-#include <algorithm>
-#include <cctype>
-#include <cstdio>
-#include <cstdlib>
-#include <map>
-#include <memory>
-#include <string>
-#include <vector>
 
 static int CurTok;
+static std::map<char, int> BinopPrecedence;
 static int getNextToken() { return CurTok = gettok(); }
+
+static std::unique_ptr<ExprAST> ParseExpression();
+std::unique_ptr<ExprAST> LogError(const char *Str);
+static std::unique_ptr<ExprAST> ParseNumberExpr();
+static std::unique_ptr<ExprAST> ParseParenExpr();
+std::unique_ptr<ExprAST> LogError(const char *Str);
+std::unique_ptr<PrototypeAST> LogErrorP(const char *Str);
 
 //解析如下格式的表达式：
 // identifer || identifier(expression list)
@@ -54,13 +55,25 @@ static std::unique_ptr<ExprAST> ParsePrimary() {
 	switch (CurTok) {
 	default:
 		return LogError("unknown token when expecting an expression");
-	case tok_identifier:
+	case VARIABLE:
 		return ParseIdentifierExpr();
-	case tok_number:
+	case INTEGER:
 		return ParseNumberExpr();
 	case '(':
 		return ParseParenExpr();
 	}
+}
+
+//GetTokPrecedence - Get the precedence of the pending binary operator token.
+static int GetTokPrecedence() {
+  if (!isascii(CurTok))
+    return -1;
+
+  // Make sure it's a declared binop.
+  int TokPrec = BinopPrecedence[CurTok];
+  if (TokPrec <= 0)
+    return -1;
+  return TokPrec;
 }
 
 //解析二元表达式
@@ -112,7 +125,7 @@ static std::unique_ptr<ExprAST> ParseExpression() {
 
 // numberexpr ::= number
 static std::unique_ptr<ExprAST> ParseNumberExpr() {
-	auto Result = llvm::make_unique<NumberExprAST>(NumVal);
+	auto Result = llvm::make_unique<NumberExprAST>(NumberVal);
 	//略过数字获取下一个输入
 	getNextToken(); 
 	return std::move(Result);
@@ -130,12 +143,13 @@ static std::unique_ptr<PrototypeAST> ParsePrototype() {
 		return LogErrorP("Expected '(' in prototype");
 
 	std::vector<std::string> ArgNames;
-	while (getNextToken() == VARIABLE)
+	getNextToken();
+	while (CurTok == VARIABLE)
 	{
 		ArgNames.push_back(IdentifierStr);
 		getNextToken();
-		if (CurTok != ',')
-			break;
+		if (CurTok == ',')
+			getNextToken();
 	}
 	if (CurTok != ')')
 		return LogErrorP("Expected ')' in prototype");
@@ -154,14 +168,20 @@ static std::unique_ptr<FunctionAST> ParseFunc()
 	if (!Proto)
 		return nullptr;
 	if (CurTok != '{')
-		return LogErrorP("Expected '{' in function");
+	{
+		LogErrorP("Expected '{' in function");
+		return nullptr;
+	}
 	getNextToken();
 
-	auto E = ParseStatement();
+	auto E = ParseExpression();
 	if (!E)
 		return nullptr;
 	if (CurTok != '}')
-		return LogErrorP("Expected '}' in function");
+	{
+		LogErrorP("Expected '}' in function");
+		return nullptr;
+	}
 
 	return llvm::make_unique<FunctionAST>(std::move(Proto), std::move(E));
 }
@@ -190,3 +210,45 @@ std::unique_ptr<PrototypeAST> LogErrorP(const char *Str) {
 	LogError(Str);
 	return nullptr;
 }
+
+// Top-Level parsing
+static void HandleFuncDefinition() {
+  if (ParseFunc()) {
+    fprintf(stderr, "Parsed a function definition.\n");
+  } else {
+    // Skip token for error recovery.
+    getNextToken();
+  }
+}
+
+static void HandleTopLevelExpression() {
+  // Evaluate a top-level expression into an anonymous function.
+  if (ParseParenExpr()) {
+    fprintf(stderr, "Parsed a top-level expr\n");
+  } else {
+    // Skip token for error recovery.
+    getNextToken();
+  }
+}
+
+//program ::= definition | expression
+static void MainLoop() {
+	while (true) {
+		fprintf(stderr, "ready> ");
+	switch (CurTok) {
+		case ';': // ignore top-level semicolons.
+			getNextToken();
+			break;
+		case TOK_EOF:
+			return;
+		case FUNC:
+		 	HandleFuncDefinition();
+			break;
+		default:
+			HandleTopLevelExpression();
+			break;
+	}
+	}
+}
+
+#endif

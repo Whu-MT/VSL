@@ -1,3 +1,5 @@
+#ifndef __AST_H__
+#define __AST_H__
 namespace{
 	//表达式抽象语法树基类
 	class ExprAST {
@@ -65,3 +67,5 @@ namespace{
       : Callee(Callee), Args(std::move(Args)) {}
 	};
 }
+
+#endif
