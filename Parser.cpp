@@ -1,0 +1,111 @@
+#include "Lexer.h"
+#include "AST.h"
+#include "llvm/ADT/STLExtras.h"
+#include <algorithm>
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
+
+static int CurTok;
+static int getNextToken() { return CurTok = gettok(); }
+
+//解析如下格式的表达式：
+// identifer || identifier(expression list)
+static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
+	std::string IdName = IdentifierStr;
+
+	getNextToken();
+
+	//解析成变量表达式
+	if (CurTok != '(') 
+		return llvm::make_unique<VariableExprAST>(IdName);
+
+	// 解析成函数调用表达式
+	getNextToken();
+	std::vector<std::unique_ptr<ExprAST>> Args;
+	if (CurTok != ')') {
+		while (true) {
+			if (auto Arg = ParseExpression())
+				Args.push_back(std::move(Arg));
+			else
+				return nullptr;
+
+			if (CurTok == ')')
+				break;
+
+			if (CurTok != ',')
+				return LogError("Expected ')' or ',' in argument list");
+			getNextToken();
+		}
+	}
+
+	getNextToken();
+
+	return llvm::make_unique<CallExprAST>(IdName, std::move(Args));
+}
+
+
+//解析成 标识符表达式、整数表达式、括号表达式中的一种
+static std::unique_ptr<ExprAST> ParsePrimary() {
+	switch (CurTok) {
+	default:
+		return LogError("unknown token when expecting an expression");
+	case tok_identifier:
+		return ParseIdentifierExpr();
+	case tok_number:
+		return ParseNumberExpr();
+	case '(':
+		return ParseParenExpr();
+	}
+}
+
+//解析二元表达式
+//参数 ： 
+//ExprPrec 左部运算符优先级
+//LHS 左部操作数
+// 递归得到可以结合的右部，循环得到一个整体二元表达式
+static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
+	std::unique_ptr<ExprAST> LHS) {
+	
+	while (true) {
+		int TokPrec = GetTokPrecedence();
+
+		// 当右部没有运算符或右部运算符优先级小于左部运算符优先级时 退出循环和递归
+		if (TokPrec < ExprPrec)
+			return LHS;
+
+		// 保存左部运算符
+		int BinOp = CurTok;
+		getNextToken();
+
+		// 得到右部表达式
+		auto RHS = ParsePrimary();
+		if (!RHS)
+			return nullptr;
+
+		// 如果该右部表达式不与该左部表达式结合 那么递归得到右部表达式
+		int NextPrec = GetTokPrecedence();
+		if (TokPrec < NextPrec) {
+			RHS = ParseBinOpRHS(TokPrec + 1, std::move(RHS));
+			if (!RHS)
+				return nullptr;
+		}
+
+		// 将左右部结合成新的左部
+		LHS = llvm::make_unique<BinaryExprAST>(BinOp, std::move(LHS),
+			std::move(RHS));
+	}
+}
+
+// 解析得到表达式
+static std::unique_ptr<ExprAST> ParseExpression() {
+	auto LHS = ParsePrimary();
+	if (!LHS)
+		return nullptr;
+
+	return ParseBinOpRHS(0, std::move(LHS));
+}
