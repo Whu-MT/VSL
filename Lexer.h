@@ -53,6 +53,7 @@ static int gettok()
 	//解析标识符:{lc_letter}({lc_letter}|{digit})*
 	if(isalpha(LastChar))
 	{
+		IdentifierStr = "";
 		IdentifierStr += LastChar;
 		while(isalnum((LastChar = getchar())))
 			IdentifierStr += LastChar;
