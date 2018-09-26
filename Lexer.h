@@ -100,16 +100,19 @@ static int gettok()
 	}
 
 	//解析注释:"//".*
-	if(LastChar == '/' && (LastChar = getchar()) == '/')
-	{
-		do
-			LastChar = getchar();
-		while(LastChar != EOF && LastChar != '\n' && LastChar != '\r');
+	if(LastChar == '/')
+        if((LastChar = getchar()) == '/')
+        {
+            do
+                LastChar = getchar();
+            while(LastChar != EOF && LastChar != '\n' && LastChar != '\r');
 
-		//若未到达结尾，返回下一个输入类型
-		if(LastChar != EOF)
-			return gettok();
-	}
+            //若未到达结尾，返回下一个输入类型
+            if(LastChar != EOF)
+                return gettok();
+        }else{
+            return '/';
+        }
 
 	//赋值符号
 	if(LastChar == ':' && (LastChar = getchar()) == '=')
