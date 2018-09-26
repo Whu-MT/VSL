@@ -174,16 +174,17 @@ static std::unique_ptr<FunctionAST> ParseFunc()
 	}
 	getNextToken();
 
-	auto E = ParseExpression();
+	/*auto E = ParseExpression();
 	if (!E)
-		return nullptr;
+		return nullptr;*/
 	if (CurTok != '}')
 	{
 		LogErrorP("Expected '}' in function");
 		return nullptr;
 	}
+	getNextToken();
 
-	return llvm::make_unique<FunctionAST>(std::move(Proto), std::move(E));
+	return llvm::make_unique<FunctionAST>(std::move(Proto), nullptr);
 }
 
 //解析括号中的表达式
@@ -221,9 +222,20 @@ static void HandleFuncDefinition() {
   }
 }
 
+/// toplevelexpr ::= expression
+static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
+  if (auto E = ParseExpression()) {
+    // Make an anonymous proto.
+    auto Proto = llvm::make_unique<PrototypeAST>("__anon_expr",
+                                                 std::vector<std::string>());
+    return llvm::make_unique<FunctionAST>(std::move(Proto), std::move(E));
+  }
+  return nullptr;
+}
+
 static void HandleTopLevelExpression() {
   // Evaluate a top-level expression into an anonymous function.
-  if (ParseParenExpr()) {
+  if (ParseTopLevelExpr()) {
     fprintf(stderr, "Parsed a top-level expr\n");
   } else {
     // Skip token for error recovery.
