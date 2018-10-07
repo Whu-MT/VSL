@@ -66,5 +66,12 @@ namespace{
 	};
 
 	//程序的抽象语法树
-	class ProgramAST
+	class ProgramAST {
+		std::vector<std::unique_ptr<FunctionAST>> funcs;
+
+	public:
+		ProgramAST(std::vector<std::unique_ptr<FunctionAST>> funcs)
+			:funcs(std::move(funcs))
+	};
 }
+

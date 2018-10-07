@@ -1,5 +1,18 @@
+#ifndef __LEXER_H__
+#define __LEXER_H__
 #include <cctype>
 #include <cstdio>
+#include <string>
+#include <cstdlib>
+#include <algorithm>
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
+#include "llvm/ADT/STLExtras.h"
 
 enum Token
 {
@@ -23,8 +36,8 @@ enum Token
 	VAR = -18,
 };
 
-static std:string IdentifierStr;
-static double NumberVal;
+static std::string IdentifierStr;
+static int NumberVal;
 
 /*
 *返回输入单词类型
@@ -40,6 +53,7 @@ static int gettok()
 	//解析标识符:{lc_letter}({lc_letter}|{digit})*
 	if(isalpha(LastChar))
 	{
+		IdentifierStr = "";
 		IdentifierStr += LastChar;
 		while(isalnum((LastChar = getchar())))
 			IdentifierStr += LastChar;
@@ -81,21 +95,28 @@ static int gettok()
 			LastChar = getchar();
 		}while(isdigit(LastChar));
 
+<<<<<<< HEAD
 		NumberVal = strtol(NumStr.c_str, nullptr);
+=======
+		NumberVal = atoi(IdentifierStr.c_str());
+>>>>>>> 1ec62aa244a3a0c0b4bcdb8297c67b8a95d7fadf
 		return INTEGER;
 	}
 
 	//解析注释:"//".*
-	if(LastChar == '/' && (LastChar = getchar()) == '/')
-	{
-		do
-			LastChar = getchar();
-		while(LastChar != EOF && LastChar != '\n' && LastChar != '\r');
+	if(LastChar == '/')
+        if((LastChar = getchar()) == '/')
+        {
+            do
+                LastChar = getchar();
+            while(LastChar != EOF && LastChar != '\n' && LastChar != '\r');
 
-		//若未到达结尾，返回下一个输入类型
-		if(LastChar != EOF)
-			return gettok();
-	}
+            //若未到达结尾，返回下一个输入类型
+            if(LastChar != EOF)
+                return gettok();
+        }else{
+            return '/';
+        }
 
 	//赋值符号
 	if(LastChar == ':' && (LastChar = getchar()) == '=')
@@ -122,3 +143,5 @@ static int gettok()
 
 	return tmpChar;
 }
+
+#endif
