@@ -1,18 +1,14 @@
 #ifndef __LEXER_H__
 #define __LEXER_H__
+#include "llvm/ADT/STLExtras.h"
 #include <cctype>
 #include <cstdio>
 #include <string>
 #include <cstdlib>
 #include <algorithm>
-#include <cctype>
-#include <cstdio>
-#include <cstdlib>
 #include <map>
 #include <memory>
-#include <string>
 #include <vector>
-#include "llvm/ADT/STLExtras.h"
 
 enum Token
 {
@@ -95,11 +91,8 @@ static int gettok()
 			LastChar = getchar();
 		}while(isdigit(LastChar));
 
-<<<<<<< HEAD
-		NumberVal = strtol(NumStr.c_str, nullptr);
-=======
 		NumberVal = atoi(IdentifierStr.c_str());
->>>>>>> 1ec62aa244a3a0c0b4bcdb8297c67b8a95d7fadf
+
 		return INTEGER;
 	}
 

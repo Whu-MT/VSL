@@ -2,6 +2,7 @@
 #define __PARSER_H__
 #include "Lexer.h"
 #include "AST.h"
+#include "llvm/IR/IRBuilder.h"
 
 static int CurTok;
 static std::map<char, int> BinopPrecedence;
@@ -205,7 +206,7 @@ static std::unique_ptr<ExprAST> ParseParenExpr() {
 //解析程序结构
 static std::unique_ptr<ProgramAST> ParseProgramAST() {
 	//接受程序中函数的语法树
-	std::vector<FunctionAST> Functions;
+	std::vector<std::unique_ptr<FunctionAST>> Functions;
 
 	//循环解析程序中所有函数
 	while (CurTok != TOK_EOF) {
@@ -261,20 +262,31 @@ static void HandleTopLevelExpression() {
 static void MainLoop() {
 	while (true) {
 		fprintf(stderr, "ready> ");
-	switch (CurTok) {
-		case ';': // ignore top-level semicolons.
-			getNextToken();
-			break;
-		case TOK_EOF:
-			return;
-		case FUNC:
-		 	HandleFuncDefinition();
-			break;
-		default:
-			HandleTopLevelExpression();
-			break;
+		switch (CurTok) {
+			case ';': // ignore top-level semicolons.
+				getNextToken();
+				break;
+			case TOK_EOF:
+				return;
+			case FUNC:
+		 		HandleFuncDefinition();
+				break;
+			default:
+				HandleTopLevelExpression();
+				break;
+		}
 	}
-	}
+
 }
 
+static LLVMContext TheContext;
+static IRBuilder<> Builder(TheContext);
+static std::unique_ptr<Module> TheModule;
+static std::map<std::string, Value *> NamedValues;
+
+//report errors found during code generation
+Value *LogErrorV(const char *Str) {
+	LogError(Str);
+	return nullptr;
+}
 #endif
