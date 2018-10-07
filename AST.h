@@ -10,7 +10,7 @@ namespace{
   		int Val;
 
 	public:
-  		NumberExprAST(int Val) : Val(Val) {}
+		NumberExprAST(int Val) : Val(Val) {}
 	};
 
 	//变量抽象语法树
@@ -64,4 +64,7 @@ namespace{
 			std::vector<std::unique_ptr<ExprAST>> Args)
       : Callee(Callee), Args(std::move(Args)) {}
 	};
+
+	//程序的抽象语法树
+	class ProgramAST
 }

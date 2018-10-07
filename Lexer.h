@@ -81,7 +81,7 @@ static int gettok()
 			LastChar = getchar();
 		}while(isdigit(LastChar));
 
-		NumberVal = strtoi(NumberVal.c_str, nullptr);
+		NumberVal = strtol(NumStr.c_str, nullptr);
 		return INTEGER;
 	}
 
