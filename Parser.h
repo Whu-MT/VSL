@@ -205,7 +205,7 @@ static std::unique_ptr<ExprAST> ParseParenExpr() {
 //解析程序结构
 static std::unique_ptr<ProgramAST> ParseProgramAST() {
 	//接受程序中函数的语法树
-	std::vector<std::FunctionAST> Functions;
+	std::vector<std::unique_ptr<FunctionAST>> Functions;
 
 	//循环解析程序中所有函数
 	while (CurTok != TOK_EOF) {

@@ -1,3 +1,6 @@
+#ifndef __AST_H__
+#define __AST_H__
+
 namespace{
 	//表达式抽象语法树基类
 	class ExprAST {
@@ -71,7 +74,8 @@ namespace{
 
 	public:
 		ProgramAST(std::vector<std::unique_ptr<FunctionAST>> funcs)
-			:funcs(std::move(funcs))
+			:funcs(std::move(funcs)){}
 	};
 }
 
+#endif
