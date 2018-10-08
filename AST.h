@@ -66,6 +66,31 @@ namespace{
 			std::vector<std::unique_ptr<ExprAST>> Args)
       : Callee(Callee), Args(std::move(Args)) {}
 	};
+
+	/*statement部分 -- lh*/
+	//statement 基类
+	class StatAST {
+	public:
+		virtual ~StatAST() = default;
+	};
+
+	//not mine
+	class DecAST : public StatAST {};
+
+	//块语句
+	class BlockStatAST : public StatAST {
+		std::vector<std::unique_ptr<DecAST>> DecList;
+		std::vector<std::unique_ptr<StatAST>> StatList;
+	};
+
+	//Text
+	class TextAST {
+
+	};
+
+	class PrinStatAST : public StatAST {
+
+	};
 }
 
 #endif
