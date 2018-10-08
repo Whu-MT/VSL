@@ -17,12 +17,6 @@ static std::unique_ptr<ExprAST> ParseParenExpr();
 std::unique_ptr<ExprAST> LogError(const char *Str);
 std::unique_ptr<PrototypeAST> LogErrorP(const char *Str);
 
-//IR 部分
-static LLVMContext TheContext;
-static IRBuilder<> Builder(TheContext);
-static Module* TheModule;
-static std::map<std::string, Value *> NamedValues;
-
 //解析如下格式的表达式：
 // identifer || identifier(expression list)
 static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
