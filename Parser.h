@@ -2,6 +2,9 @@
 #define __PARSER_H__
 #include "Lexer.h"
 #include "AST.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Verifier.h"
+using namespace llvm;
 
 static int CurTok;
 static std::map<char, int> BinopPrecedence;
@@ -202,6 +205,20 @@ static std::unique_ptr<ExprAST> ParseParenExpr() {
 	return V;
 }
 
+//解析程序结构
+static std::unique_ptr<ProgramAST> ParseProgramAST() {
+	//接受程序中函数的语法树
+	std::vector<std::unique_ptr<FunctionAST>> Functions;
+
+	//循环解析程序中所有函数
+	while (CurTok != TOK_EOF) {
+		auto Func=ParseFunc();
+		Functions.push_back(std::move(Func));
+	}
+
+	return llvm::make_unique<ProgramAST>(std::move(Functions));
+}
+
 //错误信息打印
 std::unique_ptr<ExprAST> LogError(const char *Str) {
 	fprintf(stderr, "Error: %s\n", Str);
@@ -247,19 +264,65 @@ static void HandleTopLevelExpression() {
 static void MainLoop() {
 	while (true) {
 		fprintf(stderr, "ready> ");
-	switch (CurTok) {
-		case ';': // ignore top-level semicolons.
-			getNextToken();
-			break;
-		case TOK_EOF:
-			return;
-		case FUNC:
-		 	HandleFuncDefinition();
-			break;
-		default:
-			HandleTopLevelExpression();
-			break;
+		switch (CurTok) {
+			case ';': // ignore top-level semicolons.
+				getNextToken();
+				break;
+			case TOK_EOF:
+				return;
+			case FUNC:
+		 		HandleFuncDefinition();
+				break;
+			default:
+				HandleTopLevelExpression();
+				break;
+		}
 	}
+
+}
+
+static LLVMContext TheContext;
+static IRBuilder<> Builder(TheContext);
+static std::unique_ptr<Module> TheModule;
+static std::map<std::string, Value *> NamedValues;
+
+//report errors found during code generation
+Value *LogErrorV(const char *Str) {
+	LogError(Str);
+	return nullptr;
+}
+
+Value *NumberExprAST::codegen() {
+	return ConstantFP::get(TheContext, APFloat((double)Val));
+}
+
+Value *VariableExprAST::codegen() {
+	// Look this variable up in the function.
+	Value *V = NamedValues[Name];
+	if (!V)
+		return LogErrorV("Unknown variable name");
+	return V;
+}
+
+Value *BinaryExprAST::codegen() {
+	Value *L = LHS->codegen();
+	Value *R = RHS->codegen();
+	if (!L || !R)
+		return nullptr;
+
+	switch (Op) {
+	case '+':
+		return Builder.CreateFAdd(L, R, "addtmp");
+	case '-':
+		return Builder.CreateFSub(L, R, "subtmp");
+	case '*':
+		return Builder.CreateFMul(L, R, "multmp");
+	case '/':
+		L = Builder.CreateFDiv(L, R, "divtmp");
+		// Convert bool 0/1 to double 0.0 or 1.0
+		return Builder.CreateUIToFP(L, Type::getDoubleTy(TheContext), "booltmp");
+	default:
+		return LogErrorV("invalid binary operator");
 	}
 }
 

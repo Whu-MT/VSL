@@ -1,18 +1,14 @@
 #ifndef __LEXER_H__
 #define __LEXER_H__
+#include "llvm/ADT/STLExtras.h"
 #include <cctype>
 #include <cstdio>
 #include <string>
 #include <cstdlib>
 #include <algorithm>
-#include <cctype>
-#include <cstdio>
-#include <cstdlib>
 #include <map>
 #include <memory>
-#include <string>
 #include <vector>
-#include "llvm/ADT/STLExtras.h"
 
 enum Token
 {
@@ -96,20 +92,24 @@ static int gettok()
 		}while(isdigit(LastChar));
 
 		NumberVal = atoi(IdentifierStr.c_str());
+
 		return INTEGER;
 	}
 
 	//解析注释:"//".*
-	if(LastChar == '/' && (LastChar = getchar()) == '/')
-	{
-		do
-			LastChar = getchar();
-		while(LastChar != EOF && LastChar != '\n' && LastChar != '\r');
+	if(LastChar == '/')
+        if((LastChar = getchar()) == '/')
+        {
+            do
+                LastChar = getchar();
+            while(LastChar != EOF && LastChar != '\n' && LastChar != '\r');
 
-		//若未到达结尾，返回下一个输入类型
-		if(LastChar != EOF)
-			return gettok();
-	}
+            //若未到达结尾，返回下一个输入类型
+            if(LastChar != EOF)
+                return gettok();
+        }else{
+            return '/';
+        }
 
 	//赋值符号
 	if(LastChar == ':' && (LastChar = getchar()) == '=')
