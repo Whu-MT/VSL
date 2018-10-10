@@ -91,7 +91,7 @@ static int gettok()
 			LastChar = getchar();
 		}while(isdigit(LastChar));
 
-		NumberVal = atoi(IdentifierStr.c_str());
+		NumberVal = atoi(NumStr.c_str());
 
 		return INTEGER;
 	}

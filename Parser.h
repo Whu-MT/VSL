@@ -25,7 +25,7 @@ static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
 	getNextToken();
 
 	//解析成变量表达式
-	if (CurTok != '(') 
+	if (CurTok != '(')
 		return llvm::make_unique<VariableExprAST>(IdName);
 
 	// 解析成函数调用表达式
@@ -80,18 +80,21 @@ static int GetTokPrecedence() {
 }
 
 //解析二元表达式
-//参数 ： 
+//参数 ：
 //ExprPrec 左部运算符优先级
 //LHS 左部操作数
 // 递归得到可以结合的右部，循环得到一个整体二元表达式
 static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
 	std::unique_ptr<ExprAST> LHS) {
-	
+
 	while (true) {
 		int TokPrec = GetTokPrecedence();
 
 		// 当右部没有运算符或右部运算符优先级小于左部运算符优先级时 退出循环和递归
 		if (TokPrec < ExprPrec)
+			return LHS;
+
+		if(CurTok == '}')
 			return LHS;
 
 		// 保存左部运算符
@@ -130,7 +133,7 @@ static std::unique_ptr<ExprAST> ParseExpression() {
 static std::unique_ptr<ExprAST> ParseNumberExpr() {
 	auto Result = llvm::make_unique<NumberExprAST>(NumberVal);
 	//略过数字获取下一个输入
-	getNextToken(); 
+	getNextToken();
 	return std::move(Result);
 }
 
@@ -177,9 +180,9 @@ static std::unique_ptr<FunctionAST> ParseFunc()
 	}
 	getNextToken();
 
-	/*auto E = ParseExpression();
+	auto E = ParseExpression();
 	if (!E)
-		return nullptr;*/
+		return nullptr;
 	if (CurTok != '}')
 	{
 		LogErrorP("Expected '}' in function");
@@ -187,13 +190,13 @@ static std::unique_ptr<FunctionAST> ParseFunc()
 	}
 	getNextToken();
 
-	return llvm::make_unique<FunctionAST>(std::move(Proto), nullptr);
+	return llvm::make_unique<FunctionAST>(std::move(Proto), std::move(E));
 }
 
 //解析括号中的表达式
 static std::unique_ptr<ExprAST> ParseParenExpr() {
 	// 过滤'('
-	getNextToken(); 
+	getNextToken();
 	auto V = ParseExpression();
 	if (!V)
 		return nullptr;
@@ -201,7 +204,7 @@ static std::unique_ptr<ExprAST> ParseParenExpr() {
 	if (CurTok != ')')
 		return LogError("expected ')'");
 	// 过滤')'
-	getNextToken(); 
+	getNextToken();
 	return V;
 }
 
