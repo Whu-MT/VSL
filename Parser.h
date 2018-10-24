@@ -239,6 +239,8 @@ static void HandleFuncDefinition() {
 			fprintf(stderr, "Read function definition:");
 			FnIR->print(errs());
 			fprintf(stderr, "\n");
+			TheJIT->addModule(std::move(TheModule));
+			InitializeModuleAndPassManager();
 		}
 	}
 	else {
@@ -246,6 +248,22 @@ static void HandleFuncDefinition() {
 		getNextToken();
 	}
 }
+
+//将原型添加到FunctionProtos中
+//static void HandleExtern() {
+//	if (auto ProtoAST = ParseExtern()) {
+//		if (auto *FnIR = ProtoAST->codegen()) {
+//			fprintf(stderr, "Read extern: ");
+//			FnIR->print(errs());
+//			fprintf(stderr, "\n");
+//			FunctionProtos[ProtoAST->getName()] = std::move(ProtoAST);
+//		}
+//	}
+//	else {
+//		// Skip token for error recovery.
+//		getNextToken();
+//	}
+//}
 
 /// toplevelexpr ::= expression
 static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
@@ -261,15 +279,29 @@ static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
 static void HandleTopLevelExpression() {
 	// Evaluate a top-level expression into an anonymous function.
 	if (auto FnAST = ParseTopLevelExpr()) {
-		if (auto *FnIR = FnAST->codegen()) {
-			fprintf(stderr, "Read top-level expression:");
-			FnIR->print(errs());
-			fprintf(stderr, "\n");
+		if (FnAST->codegen()) {
+
+			// JIT the module containing the anonymous expression, keeping a handle so
+			// we can free it later.
+			auto H = TheJIT->addModule(std::move(TheModule));
+			InitializeModuleAndPassManager();
+
+			// Search the JIT for the __anon_expr symbol.
+			auto ExprSymbol = TheJIT->findSymbol("__anon_expr");
+			assert(ExprSymbol && "Function not found");
+
+			// Get the symbol's address and cast it to the right type (takes no
+			// arguments, returns a double) so we can call it as a native function.
+			double(*FP)() = (double(*)())(intptr_t)cantFail(ExprSymbol.getAddress());
+			fprintf(stderr, "Evaluated to %f\n", FP());
+
+			// Delete the anonymous expression module from the JIT.
+			TheJIT->removeModule(H);
 		}
-	}
-	else {
-		// Skip token for error recovery.
-		getNextToken();
+		else {
+			// Skip token for error recovery.
+			getNextToken();
+		}
 	}
 }
 

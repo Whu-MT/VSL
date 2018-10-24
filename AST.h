@@ -1,17 +1,50 @@
 #ifndef __AST_H__
 #define __AST_H__
 
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/Verifier.h"
 #include "Lexer.h"
+#include "llvm/IR/Verifier.h"
+#include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Type.h"
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Scalar/GVN.h"
+#include <algorithm>
+#include <cassert>
+#include <cctype>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
+#include "../include/KaleidoscopeJIT.h"
 
 using namespace llvm;
+using namespace llvm::orc;
+
+class PrototypeAST;
+Function *getFunction(std::string Name);
 
 	//IR 部分
 	static LLVMContext TheContext;
 	static IRBuilder<> Builder(TheContext);
-	static Module* TheModule;
+	static std::unique_ptr<Module> TheModule;
 	static std::map<std::string, Value *> NamedValues;
+	static std::unique_ptr<legacy::FunctionPassManager> TheFPM;
+	static std::unique_ptr<KaleidoscopeJIT> TheJIT;
+	//包含每个元素的最新原型
+	static std::map<std::string, std::unique_ptr<PrototypeAST>> FunctionProtos;
 
 	//表达式抽象语法树基类
 	class ExprAST {
@@ -119,7 +152,7 @@ using namespace llvm;
 
 			// 注册该函数
 			Function *F =
-				Function::Create(FT, Function::InternalLinkage, Name, TheModule);
+				Function::Create(FT, Function::InternalLinkage, Name, TheModule.get());
 
 			// 为函数参数命名
 			unsigned Idx = 0;
@@ -144,9 +177,10 @@ using namespace llvm;
 		* 待重构：如上
 		*/
 		Function * codegen() {
-			// 调用 Proto 的 codegen()
-			Function *TheFunction = Proto->codegen();
-
+			//可在当前模块中获取任何先前声明的函数的函数声明
+			auto &P = *Proto;
+			FunctionProtos[Proto->getName()] = std::move(Proto);
+			Function *TheFunction = getFunction(P.getName());
 			if (!TheFunction)
 				return nullptr;
 
@@ -165,6 +199,9 @@ using namespace llvm;
 
 				// Validate the generated code, checking for consistency.
 				verifyFunction(*TheFunction);
+
+				// Run the optimizer on the function.
+				TheFPM->run(*TheFunction);
 
 				return TheFunction;
 			}
@@ -186,7 +223,7 @@ using namespace llvm;
 
 		Value * codegen() {
 			// Look up the name in the global module table.
-			Function *CalleeF = TheModule->getFunction(Callee);
+			Function *CalleeF = getFunction(Callee);
 			if (!CalleeF)
 				return LogErrorV("Unknown function referenced");
 
@@ -238,5 +275,63 @@ using namespace llvm;
 	class PrinStatAST : public StatAST {
 
 	};
+
+	//创建和初始化模块和传递管理器
+	static void InitializeModuleAndPassManager() {
+		
+		// Open a new module.
+		TheModule = llvm::make_unique<Module>("my cool jit", TheContext);
+		TheModule->setDataLayout(TheJIT->getTargetMachine().createDataLayout());
+
+		// Create a new pass manager attached to it.
+		TheFPM = llvm::make_unique<legacy::FunctionPassManager>(TheModule.get());
+
+		// Do simple "peephole" optimizations and bit-twiddling optzns.
+		TheFPM->add(createInstructionCombiningPass());
+		// Reassociate expressions.
+		TheFPM->add(createReassociatePass());
+		// Eliminate Common SubExpressions.
+		TheFPM->add(createGVNPass());
+		// Simplify the control flow graph (deleting unreachable blocks, etc).
+		TheFPM->add(createCFGSimplificationPass());
+
+		TheFPM->doInitialization();
+		
+	}
+
+	Function *getFunction(std::string Name) {
+		// First, see if the function has already been added to the current module.
+		if (auto *F = TheModule->getFunction(Name))
+			return F;
+
+		// If not, check whether we can codegen the declaration from some existing
+		// prototype.
+		auto FI = FunctionProtos.find(Name);
+		if (FI != FunctionProtos.end())
+			return FI->second->codegen();
+
+		// If no existing prototype exists, return null.
+		return nullptr;
+	}
+
+	//"Library" functions that can be "extern'd" from user code.
+	#ifdef LLVM_ON_WIN32
+	#define DLLEXPORT __declspec(dllexport)
+	#else
+	#define DLLEXPORT
+	#endif
+
+	// putchard - putchar that takes a double and returns 0.
+	extern "C" DLLEXPORT double putchard(double X) {
+		fputc((char)X, stderr);
+		return 0;
+	}
+
+	// printd - printf that takes a double prints it as "%f\n", returning 0.
+	extern "C" DLLEXPORT double printd(double X) {
+		fprintf(stderr, "%f\n", X);
+		return 0;
+	}
+
 
 #endif

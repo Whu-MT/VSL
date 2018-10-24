@@ -1,9 +1,16 @@
 #include "Lexer.h"
 #include "AST.h"
 #include "Parser.h"
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/Target/TargetMachine.h"
+#include "../include/KaleidoscopeJIT.h"
 
 
 int main() {
+  InitializeNativeTarget();
+  InitializeNativeTargetAsmPrinter();
+  InitializeNativeTargetAsmParser();
+
   BinopPrecedence['+'] = 10;
   BinopPrecedence['-'] = 10;
   BinopPrecedence['*'] = 40;
@@ -14,7 +21,9 @@ int main() {
   getNextToken();
 
   // Make the module, which holds all the code.
-  TheModule = new Module("my cool jit", TheContext);
+  //TheModule = new Module("my cool jit", TheContext);
+
+  TheJIT = llvm::make_unique<KaleidoscopeJIT>();
 
   // Run the main "interpreter loop" now.
   MainLoop();
