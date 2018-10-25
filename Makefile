@@ -1,4 +1,4 @@
-LLVM = `llvm-config --cxxflags --ldflags --system-libs --libs core`
+LLVM = `llvm-config --cxxflags --ldflags --system-libs --libs core mcjit native`
 all:
 	mkdir -p bin/Debug
 	mkdir -p obj/Debug
@@ -6,10 +6,3 @@ all:
 	clang++ obj/Debug/main.o -o bin/Debug/VSL $(LLVM)
 clean:
 	rm -r -f bin obj
-	mv VSL.cbp ..
-	mv VSL.layout ..
-	mv VSL.depend ..
-cbp:
-	mv ../VSL.cbp .
-	mv ../VSL.layout .
-	mv ../VSL.depend .

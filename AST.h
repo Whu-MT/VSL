@@ -28,7 +28,11 @@
 #include <memory>
 #include <string>
 #include <vector>
+#ifdef linux    //linux
+#include "KaleidoscopeJIT.h"
+#else //windows
 #include "../include/KaleidoscopeJIT.h"
+#endif
 
 using namespace llvm;
 using namespace llvm::orc;
@@ -69,7 +73,7 @@ Function *getFunction(std::string Name);
 		NumberExprAST(int Val) : Val(Val) {}
 
 		Value * codegen() {
-			return ConstantFP::get(TheContext, APFloat((double)Val));
+			return ConstantInt::get(TheContext, APInt(32,Val,true));
 		}
 	};
 
@@ -108,15 +112,15 @@ Function *getFunction(std::string Name);
 
 			switch (Op) {
 			case '+':
-				return Builder.CreateFAdd(L, R, "addtmp");
+				return Builder.CreateAdd(L, R, "addtmp");
 			case '-':
-				return Builder.CreateFSub(L, R, "subtmp");
+				return Builder.CreateSub(L, R, "subtmp");
 			case '*':
-				return Builder.CreateFMul(L, R, "multmp");
+				return Builder.CreateMul(L, R, "multmp");
 			case '/':
-				L = Builder.CreateFDiv(L, R, "divtmp");
-				// Convert bool 0/1 to double 0.0 or 1.0
-				return Builder.CreateUIToFP(L, Type::getDoubleTy(TheContext), "booltmp");
+				L = Builder.CreateExactSDiv(L, R, "divtmp");
+				// Convert bool 0/1 to int 0 or 1
+				return Builder.CreateUIToFP(L, Type::getInt32Ty(TheContext), "booltmp");
 			default:
 				return LogErrorV("invalid binary operator");
 			}
@@ -278,7 +282,7 @@ Function *getFunction(std::string Name);
 
 	//创建和初始化模块和传递管理器
 	static void InitializeModuleAndPassManager() {
-		
+
 		// Open a new module.
 		TheModule = llvm::make_unique<Module>("my cool jit", TheContext);
 		TheModule->setDataLayout(TheJIT->getTargetMachine().createDataLayout());
@@ -296,7 +300,7 @@ Function *getFunction(std::string Name);
 		TheFPM->add(createCFGSimplificationPass());
 
 		TheFPM->doInitialization();
-		
+
 	}
 
 	Function *getFunction(std::string Name) {

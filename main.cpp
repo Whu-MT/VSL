@@ -3,7 +3,11 @@
 #include "Parser.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Target/TargetMachine.h"
+#ifdef linux    //linux
+#include "KaleidoscopeJIT.h"
+#else  //windows
 #include "../include/KaleidoscopeJIT.h"
+#endif
 
 
 int main() {
@@ -24,6 +28,7 @@ int main() {
   //TheModule = new Module("my cool jit", TheContext);
 
   TheJIT = llvm::make_unique<KaleidoscopeJIT>();
+  InitializeModuleAndPassManager();
 
   // Run the main "interpreter loop" now.
   MainLoop();

@@ -249,22 +249,6 @@ static void HandleFuncDefinition() {
 	}
 }
 
-//将原型添加到FunctionProtos中
-//static void HandleExtern() {
-//	if (auto ProtoAST = ParseExtern()) {
-//		if (auto *FnIR = ProtoAST->codegen()) {
-//			fprintf(stderr, "Read extern: ");
-//			FnIR->print(errs());
-//			fprintf(stderr, "\n");
-//			FunctionProtos[ProtoAST->getName()] = std::move(ProtoAST);
-//		}
-//	}
-//	else {
-//		// Skip token for error recovery.
-//		getNextToken();
-//	}
-//}
-
 /// toplevelexpr ::= expression
 static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
   if (auto E = ParseExpression()) {
