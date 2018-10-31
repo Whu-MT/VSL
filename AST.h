@@ -170,7 +170,7 @@ Function *getFunction(std::string Name);
 	//函数抽象语法树
 	class FunctionAST {
 		std::unique_ptr<PrototypeAST> Proto;
-		std::unique_ptr<ExprAST> Body;
+		std::unique_ptr<StatAST> Body;
 
 	public:
 		FunctionAST(std::unique_ptr<PrototypeAST> Proto,
@@ -260,6 +260,7 @@ Function *getFunction(std::string Name);
 	class StatAST {
 	public:
 		virtual ~StatAST() = default;
+		virtual Value *codegen() = 0;
 	};
 
 	//not mine
@@ -277,6 +278,74 @@ Function *getFunction(std::string Name);
 	};
 
 	class PrinStatAST : public StatAST {
+
+	};
+
+	//IF Statement
+	class IfStatAST : public StatAST {
+		std::unique_ptr<ExprAST> Cond;
+		std::unique_ptr<StatAST> Then, Else;
+
+	public:
+		IfStatAST(std::unique_ptr<ExprAST> Cond, std::unique_ptr<StatAST> Then,
+			std::unique_ptr<StatAST> Else)
+			: Cond(std::move(Cond)), Then(std::move(Then)), Else(std::move(Else)) {}
+
+		Value *codegen() {
+			Value *CondV = Cond->codegen();
+			if (!CondV)
+				return nullptr;
+
+			// Convert condition to a bool by comparing non-equal to 0.0.
+			CondV = Builder.CreateFCmpONE(
+				CondV, ConstantFP::get(TheContext, APFloat(0.0)), "ifcond");
+
+			Function *TheFunction = Builder.GetInsertBlock()->getParent();
+
+			// Create blocks for the then and else cases.  Insert the 'then' block at the
+			// end of the function.
+			BasicBlock *ThenBB = BasicBlock::Create(TheContext, "then", TheFunction);
+			BasicBlock *MergeBB = BasicBlock::Create(TheContext, "ifcont");
+			BasicBlock *ElseBB = nullptr;
+			if (Else != nullptr) {
+				ElseBB = BasicBlock::Create(TheContext, "else");
+				Builder.CreateCondBr(CondV, ThenBB, ElseBB);
+			}
+			else {
+				Builder.CreateCondBr(CondV, ThenBB, MergeBB);
+			}
+			
+			// Emit then value.
+			Builder.SetInsertPoint(ThenBB);
+
+			Value *ThenV = Then->codegen();
+			if (!ThenV)
+				return nullptr;
+
+			Builder.CreateBr(MergeBB);
+			// Codegen of 'Then' can change the current block, update ThenBB for the PHI.
+			ThenBB = Builder.GetInsertBlock();
+
+			// Emit else block.
+			if (ElseBB != nullptr) {
+				TheFunction->getBasicBlockList().push_back(ElseBB);
+				Builder.SetInsertPoint(ElseBB);
+
+				Value *ElseV = Else->codegen();
+				if (!ElseV)
+					return nullptr;
+				Builder.CreateBr(MergeBB);
+
+				// Codegen of 'Else' can change the current block, update ElseBB for the PHI.
+				ElseBB = Builder.GetInsertBlock();
+			}
+
+			// Emit merge block.
+			TheFunction->getBasicBlockList().push_back(MergeBB);
+			Builder.SetInsertPoint(MergeBB);
+			
+			return nullptr;
+		}
 
 	};
 
