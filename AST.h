@@ -156,7 +156,7 @@ Function *getFunction(std::string Name);
 
 			// 注册该函数
 			Function *F =
-				Function::Create(FT, Function::InternalLinkage, Name, TheModule.get());
+				Function::Create(FT, Function::ExternalLinkage, Name, TheModule.get());
 
 			// 为函数参数命名
 			unsigned Idx = 0;
