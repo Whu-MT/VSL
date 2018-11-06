@@ -17,6 +17,7 @@ static std::unique_ptr<ExprAST> ParseParenExpr();
 std::unique_ptr<ExprAST> LogError(const char *Str);
 std::unique_ptr<PrototypeAST> LogErrorP(const char *Str);
 std::unique_ptr<StatAST> LogErrorS(const char *Str);
+static std::unique_ptr<StatAST> ParseStatement();
 
 //解析如下格式的表达式：
 // identifer || identifier(expression list)
@@ -298,7 +299,7 @@ static void HandleFuncDefinition() {
 
 /// toplevelexpr ::= expression
 static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
-  if (auto E = ParseExpression()) {
+  if (auto E = ParseStatement()) {
     // Make an anonymous proto.
     auto Proto = llvm::make_unique<PrototypeAST>("__anon_expr",
                                                  std::vector<std::string>());

@@ -38,6 +38,7 @@ using namespace llvm;
 using namespace llvm::orc;
 
 class PrototypeAST;
+class StatAST;
 Function *getFunction(std::string Name);
 
 	//IR 部分
@@ -174,7 +175,7 @@ Function *getFunction(std::string Name);
 
 	public:
 		FunctionAST(std::unique_ptr<PrototypeAST> Proto,
-			std::unique_ptr<ExprAST> Body)
+			std::unique_ptr<StatAST> Body)
 			: Proto(std::move(Proto)), Body(std::move(Body)) {}
 
 		/*
@@ -197,18 +198,19 @@ Function *getFunction(std::string Name);
 			for (auto &Arg : TheFunction->args())
 				NamedValues[Arg.getName()] = &Arg;
 
-			if (Value *RetVal = Body->codegen()) {
-				// Finish off the function.
-				Builder.CreateRet(RetVal);
+			/*Body->codegen();*/
+			//if (Value *RetVal = Body->codegen()) {
+			//	// Finish off the function.
+			//	Builder.CreateRet(RetVal);
 
-				// Validate the generated code, checking for consistency.
-				verifyFunction(*TheFunction);
+			//	// Validate the generated code, checking for consistency.
+			//	verifyFunction(*TheFunction);
 
-				// Run the optimizer on the function.
-				TheFPM->run(*TheFunction);
+			//	// Run the optimizer on the function.
+			//	TheFPM->run(*TheFunction);
 
-				return TheFunction;
-			}
+			//	return TheFunction;
+			//}
 
 			// Error reading body, remove function.
 			TheFunction->eraseFromParent();
@@ -260,7 +262,7 @@ Function *getFunction(std::string Name);
 	class StatAST {
 	public:
 		virtual ~StatAST() = default;
-		virtual Value *codegen() = 0;
+		virtual Value* codegen() = 0;
 	};
 
 	//not mine
