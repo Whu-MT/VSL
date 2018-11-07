@@ -16,6 +16,8 @@ static std::unique_ptr<ExprAST> ParseNumberExpr();
 static std::unique_ptr<ExprAST> ParseParenExpr();
 std::unique_ptr<ExprAST> LogError(const char *Str);
 std::unique_ptr<PrototypeAST> LogErrorP(const char *Str);
+std::unique_ptr<StatAST> LogErrorS(const char *Str);
+static std::unique_ptr<StatAST> ParseStatement();
 
 //解析如下格式的表达式：
 // identifer || identifier(expression list)
@@ -180,7 +182,7 @@ static std::unique_ptr<FunctionAST> ParseFunc()
 	}
 	getNextToken();
 
-	auto E = ParseExpression();
+	auto E = ParseStatement();
 	if (!E)
 		return nullptr;
 	if (CurTok != '}')
@@ -208,6 +210,48 @@ static std::unique_ptr<ExprAST> ParseParenExpr() {
 	return V;
 }
 
+//解析 IF Statement
+static std::unique_ptr<StatAST> ParseIfStat() {
+	getNextToken(); // eat the IF.
+
+					// condition.
+	auto Cond = ParseExpression();
+	if (!Cond)
+		return nullptr;
+
+	if (CurTok != THEN)
+		return LogErrorS("expected THEN");
+	getNextToken(); // eat the THEN
+
+	auto Then = ParseStatement();
+	if (!Then)
+		return nullptr;
+
+	std::unique_ptr<StatAST> Else = nullptr;
+	if (CurTok == ELSE) {
+		Else = ParseStatement();
+		if (!Else)
+			return nullptr;
+	}
+	else if(CurTok != FI)
+		return LogErrorS("expected FI or ELSE");
+
+	getNextToken();
+
+	return llvm::make_unique<IfStatAST>(std::move(Cond), std::move(Then),
+		std::move(Else));
+}
+
+static std::unique_ptr<StatAST> ParseStatement() {
+	switch (CurTok) {
+		case IF:
+			return ParseIfStat();
+			break;
+		default:
+			return nullptr;
+	}
+}
+
 //解析程序结构
 static std::unique_ptr<ProgramAST> ParseProgramAST() {
 	//接受程序中函数的语法树
@@ -231,6 +275,10 @@ std::unique_ptr<PrototypeAST> LogErrorP(const char *Str) {
 	LogError(Str);
 	return nullptr;
 }
+std::unique_ptr<StatAST> LogErrorS(const char *Str) {
+	fprintf(stderr, "Error: %s\n", Str);
+	return nullptr;
+}
 
 // Top-Level parsing
 static void HandleFuncDefinition() {
@@ -251,7 +299,7 @@ static void HandleFuncDefinition() {
 
 /// toplevelexpr ::= expression
 static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
-  if (auto E = ParseExpression()) {
+  if (auto E = ParseStatement()) {
     // Make an anonymous proto.
     auto Proto = llvm::make_unique<PrototypeAST>("__anon_expr",
                                                  std::vector<std::string>());
