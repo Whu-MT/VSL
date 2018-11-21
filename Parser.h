@@ -242,13 +242,42 @@ static std::unique_ptr<StatAST> ParseIfStat() {
 		std::move(Else));
 }
 
+//½âÎö RETURN Statement
+static std::unique_ptr<StatAST> ParseRetStat() {
+	getNextToken();
+	auto Val = ParseExpression();
+	if (!Val)
+		return nullptr;
+
+	return llvm::make_unique<RetStatAST>(std::move(Val));
+}
+
+//½âÎö ¸³ÖµÓï¾ä
+static std::unique_ptr<StatAST> ParseAssStat() {
+	auto Name = ParseIdentifierExpr();
+	if (!Name)
+		return nullptr;
+	if (CurTok != '=')
+		return LogErrorS("need =");
+	getNextToken();
+	
+	auto Expression = ParseExpression();
+	if (!Expression)
+		return nullptr;
+
+	return llvm::make_unique<AssStatAST>(std::move(Name), std::move(Expression));
+}
+
 static std::unique_ptr<StatAST> ParseStatement() {
 	switch (CurTok) {
 		case IF:
 			return ParseIfStat();
 			break;
+		case RETURN:
+			return ParseRetStat();
 		default:
-			return nullptr;
+			auto E = ParseAssStat();
+			return E;
 	}
 }
 

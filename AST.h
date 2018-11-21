@@ -38,7 +38,6 @@ using namespace llvm;
 using namespace llvm::orc;
 
 class PrototypeAST;
-class StatAST;
 Function *getFunction(std::string Name);
 
 	//IR 部分
@@ -168,94 +167,6 @@ Function *getFunction(std::string Name);
 		}
 	};
 
-	//函数抽象语法树
-	class FunctionAST {
-		std::unique_ptr<PrototypeAST> Proto;
-		std::unique_ptr<StatAST> Body;
-
-	public:
-		FunctionAST(std::unique_ptr<PrototypeAST> Proto,
-			std::unique_ptr<StatAST> Body)
-			: Proto(std::move(Proto)), Body(std::move(Body)) {}
-
-		/*
-		* 待重构：如上
-		*/
-		Function * codegen() {
-			//可在当前模块中获取任何先前声明的函数的函数声明
-			auto &P = *Proto;
-			FunctionProtos[Proto->getName()] = std::move(Proto);
-			Function *TheFunction = getFunction(P.getName());
-			if (!TheFunction)
-				return nullptr;
-
-			// Create a new basic block to start insertion into.
-			BasicBlock *BB = BasicBlock::Create(TheContext, "entry", TheFunction);
-			Builder.SetInsertPoint(BB);
-
-			// Record the function arguments in the NamedValues map.
-			NamedValues.clear();
-			for (auto &Arg : TheFunction->args())
-				NamedValues[Arg.getName()] = &Arg;
-
-			/*Body->codegen();*/
-			//if (Value *RetVal = Body->codegen()) {
-			//	// Finish off the function.
-			//	Builder.CreateRet(RetVal);
-
-			//	// Validate the generated code, checking for consistency.
-			//	verifyFunction(*TheFunction);
-
-			//	// Run the optimizer on the function.
-			//	TheFPM->run(*TheFunction);
-
-			//	return TheFunction;
-			//}
-
-			// Error reading body, remove function.
-			TheFunction->eraseFromParent();
-			return nullptr;
-		}
-	};
-
-	//函数调用抽象语法树
-	class CallExprAST : public ExprAST {
-		std::string Callee;
-		std::vector<std::unique_ptr<ExprAST>> Args;
-	public:
-		CallExprAST(const std::string &Callee,
-			std::vector<std::unique_ptr<ExprAST>> Args)
-			: Callee(Callee), Args(std::move(Args)) {}
-
-		Value * codegen() {
-			// Look up the name in the global module table.
-			Function *CalleeF = getFunction(Callee);
-			if (!CalleeF)
-				return LogErrorV("Unknown function referenced");
-
-			// If argument mismatch error.
-			if (CalleeF->arg_size() != Args.size())
-				return LogErrorV("Incorrect # arguments passed");
-
-			std::vector<Value *> ArgsV;
-			for (unsigned i = 0, e = Args.size(); i != e; ++i) {
-				ArgsV.push_back(Args[i]->codegen());
-				if (!ArgsV.back())
-					return nullptr;
-			}
-
-			return Builder.CreateCall(CalleeF, ArgsV, "calltmp");
-		}
-	};
-
-	//程序的抽象语法树
-	class ProgramAST {
-		std::vector<std::unique_ptr<FunctionAST>> funcs;
-
-	public:
-		ProgramAST(std::vector<std::unique_ptr<FunctionAST>> funcs)
-			:funcs(std::move(funcs)) {}
-	};
 
 	/*statement部分 -- lh*/
 	//statement 基类
@@ -349,6 +260,125 @@ Function *getFunction(std::string Name);
 			return nullptr;
 		}
 
+	};
+
+	class RetStatAST : public StatAST {
+		std::unique_ptr<ExprAST> Val;
+
+		public:
+			RetStatAST(std::unique_ptr<ExprAST> Val)
+				: Val(std::move(Val)) {}
+
+			Value *codegen() {
+				if (Value *RetVal = Val->codegen()) {
+					return Builder.CreateRet(RetVal);
+				}
+			}
+	};
+
+	class AssStatAST : public StatAST {
+		std::unique_ptr<ExprAST> Name;
+		std::unique_ptr<ExprAST> Expression;
+
+	public:
+		AssStatAST(std::unique_ptr<ExprAST> Name, std::unique_ptr<ExprAST> Expression)
+			: Name(std::move(Name)), Expression(std::move(Expression)) {}
+
+		Value *codegen() {
+			Value* NValue = Name->codegen();
+			Value* EValue = Expression->codegen();
+			if(NValue && EValue);
+				return Builder.CreateStore(NValue, EValue);
+		}
+	};
+
+	//函数抽象语法树
+	class FunctionAST {
+		std::unique_ptr<PrototypeAST> Proto;
+		std::unique_ptr<StatAST> Body;
+
+	public:
+		FunctionAST(std::unique_ptr<PrototypeAST> Proto,
+			std::unique_ptr<StatAST> Body)
+			: Proto(std::move(Proto)), Body(std::move(Body)) {}
+
+		/*
+		* 待重构：如上
+		*/
+		Function * codegen() {
+			//可在当前模块中获取任何先前声明的函数的函数声明
+			auto &P = *Proto;
+			FunctionProtos[Proto->getName()] = std::move(Proto);
+			Function *TheFunction = getFunction(P.getName());
+			if (!TheFunction)
+				return nullptr;
+
+			// Create a new basic block to start insertion into.
+			BasicBlock *BB = BasicBlock::Create(TheContext, "entry", TheFunction);
+			Builder.SetInsertPoint(BB);
+
+			// Record the function arguments in the NamedValues map.
+			NamedValues.clear();
+			for (auto &Arg : TheFunction->args())
+				NamedValues[Arg.getName()] = &Arg;
+
+			Body->codegen();
+			//if (Value *RetVal = Body->codegen()) {
+			//	// Finish off the function.
+			//	Builder.CreateRet(RetVal);
+
+			//	// Validate the generated code, checking for consistency.
+			//	verifyFunction(*TheFunction);
+
+			//	// Run the optimizer on the function.
+			//	TheFPM->run(*TheFunction);
+
+			//	return TheFunction;
+			//}
+
+			// Error reading body, remove function.
+			/*TheFunction->eraseFromParent();*/
+			return TheFunction;
+		}
+	};
+
+	//函数调用抽象语法树
+	class CallExprAST : public ExprAST {
+		std::string Callee;
+		std::vector<std::unique_ptr<ExprAST>> Args;
+	public:
+		CallExprAST(const std::string &Callee,
+			std::vector<std::unique_ptr<ExprAST>> Args)
+			: Callee(Callee), Args(std::move(Args)) {}
+
+		Value * codegen() {
+			// Look up the name in the global module table.
+			Function *CalleeF = getFunction(Callee);
+			if (!CalleeF)
+				return LogErrorV("Unknown function referenced");
+
+			// If argument mismatch error.
+			if (CalleeF->arg_size() != Args.size())
+				return LogErrorV("Incorrect # arguments passed");
+
+			std::vector<Value *> ArgsV;
+			for (unsigned i = 0, e = Args.size(); i != e; ++i) {
+				ArgsV.push_back(Args[i]->codegen());
+				if (!ArgsV.back())
+					return nullptr;
+			}
+
+			return Builder.CreateCall(CalleeF, ArgsV, "calltmp");
+		}
+	};
+
+	//程序的抽象语法树
+	class ProgramAST {
+		std::vector<std::unique_ptr<FunctionAST>> funcs;
+
+	public:
+		ProgramAST(std::vector<std::unique_ptr<FunctionAST>> funcs)
+			:funcs(std::move(funcs)) {}
 	};
 
 	//创建和初始化模块和传递管理器
