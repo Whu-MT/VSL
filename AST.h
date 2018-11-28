@@ -39,12 +39,14 @@ using namespace llvm::orc;
 
 class PrototypeAST;
 Function *getFunction(std::string Name);
+static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
+	const std::string &VarName);
 
 	//IR 部分
 	static LLVMContext TheContext;
 	static IRBuilder<> Builder(TheContext);
 	static std::unique_ptr<Module> TheModule;
-	static std::map<std::string, Value *> NamedValues;
+	static std::map<std::string, AllocaInst*> NamedValues;
 	static std::unique_ptr<legacy::FunctionPassManager> TheFPM;
 	static std::unique_ptr<KaleidoscopeJIT> TheJIT;
 	//包含每个元素的最新原型
@@ -82,6 +84,10 @@ Function *getFunction(std::string Name);
 		std::string Name;
 
 	public:
+		std::string getName() {
+			return Name;
+		}
+
 		VariableExprAST(const std::string &Name) : Name(Name) {}
 
 		Value * codegen() {
@@ -105,6 +111,7 @@ Function *getFunction(std::string Name);
 
 
 		Value * codegen() {
+
 			Value *L = LHS->codegen();
 			Value *R = RHS->codegen();
 			if (!L || !R)
@@ -277,18 +284,25 @@ Function *getFunction(std::string Name);
 	};
 
 	class AssStatAST : public StatAST {
-		std::unique_ptr<ExprAST> Name;
+		std::unique_ptr<VariableExprAST> Name;
 		std::unique_ptr<ExprAST> Expression;
 
 	public:
-		AssStatAST(std::unique_ptr<ExprAST> Name, std::unique_ptr<ExprAST> Expression)
+		AssStatAST(std::unique_ptr<VariableExprAST> Name, std::unique_ptr<ExprAST> Expression)
 			: Name(std::move(Name)), Expression(std::move(Expression)) {}
 
 		Value *codegen() {
-			Value* NValue = Name->codegen();
 			Value* EValue = Expression->codegen();
-			if(NValue && EValue);
-				return Builder.CreateStore(NValue, EValue);
+			if (!EValue)
+				return nullptr;
+
+			Value *Variable = NamedValues[Name->getName()];
+			if (!Variable)
+				return LogErrorV("Unknown variable name");
+
+			Builder.CreateStore(EValue, Variable);
+
+			return EValue;
 		}
 	};
 
@@ -319,8 +333,17 @@ Function *getFunction(std::string Name);
 
 			// Record the function arguments in the NamedValues map.
 			NamedValues.clear();
-			for (auto &Arg : TheFunction->args())
-				NamedValues[Arg.getName()] = &Arg;
+			for (auto &Arg : TheFunction->args()) {
+				// 为形参分配空间
+				AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, Arg.getName());
+
+				// 存储
+				Builder.CreateStore(&Arg, Alloca);
+
+				// 保存在NamedValues中
+				NamedValues[Arg.getName()] = Alloca;
+			}
+				
 
 			Body->codegen();
 			//if (Value *RetVal = Body->codegen()) {
@@ -391,6 +414,8 @@ Function *getFunction(std::string Name);
 		// Create a new pass manager attached to it.
 		TheFPM = llvm::make_unique<legacy::FunctionPassManager>(TheModule.get());
 
+		// Promote allocas to registers.
+		TheFPM->add(createPromoteMemoryToRegisterPass());
 		// Do simple "peephole" optimizations and bit-twiddling optzns.
 		TheFPM->add(createInstructionCombiningPass());
 		// Reassociate expressions.
@@ -417,6 +442,16 @@ Function *getFunction(std::string Name);
 
 		// If no existing prototype exists, return null.
 		return nullptr;
+	}
+
+	/// CreateEntryBlockAlloca - Create an alloca instruction in the entry block of
+	/// the function.  This is used for mutable variables etc.
+	static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
+		const std::string &VarName) {
+		IRBuilder<> TmpB(&TheFunction->getEntryBlock(),
+			TheFunction->getEntryBlock().begin());
+		return TmpB.CreateAlloca(Type::getInt32Ty(TheContext), 0,
+			VarName.c_str());
 	}
 
 	//"Library" functions that can be "extern'd" from user code.

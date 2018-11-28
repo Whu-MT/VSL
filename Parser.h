@@ -254,7 +254,9 @@ static std::unique_ptr<StatAST> ParseRetStat() {
 
 //½âÎö ¸³ÖµÓï¾ä
 static std::unique_ptr<StatAST> ParseAssStat() {
-	auto Name = ParseIdentifierExpr();
+	auto a = ParseIdentifierExpr();
+	VariableExprAST* Name = (VariableExprAST*)a.get();
+	auto NameV = llvm::make_unique<VariableExprAST>(Name->getName());
 	if (!Name)
 		return nullptr;
 	if (CurTok != '=')
@@ -265,7 +267,7 @@ static std::unique_ptr<StatAST> ParseAssStat() {
 	if (!Expression)
 		return nullptr;
 
-	return llvm::make_unique<AssStatAST>(std::move(Name), std::move(Expression));
+	return llvm::make_unique<AssStatAST>(std::move(NameV), std::move(Expression));
 }
 
 static std::unique_ptr<StatAST> ParseStatement() {
@@ -316,7 +318,7 @@ static void HandleFuncDefinition() {
 			fprintf(stderr, "Read function definition:");
 			FnIR->print(errs());
 			fprintf(stderr, "\n");
-			TheJIT->addModule(std::move(TheModule));
+			//TheJIT->addModule(std::move(TheModule));
 			InitializeModuleAndPassManager();
 		}
 	}
@@ -368,6 +370,7 @@ static void HandleTopLevelExpression() {
 
 //program ::= definition | expression
 static void MainLoop() {
+
 	while (true) {
 		fprintf(stderr, "ready> ");
 		switch (CurTok) {
