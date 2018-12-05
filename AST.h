@@ -58,7 +58,13 @@ Function *getFunction(std::string Name);
 		virtual Value *codegen() = 0;
 	};
 
-	std::unique_ptr<ExprAST> LogError(const char *Str);
+	class StatAST {
+	public:
+		virtual ~StatAST() = default;
+		virtual Value* codegen() = 0;
+	};
+
+	std::unique_ptr<StatAST> LogError(const char *Str);
 
 	//report errors found during code generation
 	Value *LogErrorV(const char *Str) {
@@ -67,7 +73,7 @@ Function *getFunction(std::string Name);
 	}
 
 	//数字抽象语法树
-	class NumberExprAST : public ExprAST {
+	class NumberExprAST : public StatAST {
 		int Val;
 
 	public:
@@ -79,7 +85,7 @@ Function *getFunction(std::string Name);
 	};
 
 	//变量抽象语法树
-	class VariableExprAST : public ExprAST {
+	class VariableExprAST : public StatAST {
 		std::string Name;
 
 	public:
@@ -95,13 +101,13 @@ Function *getFunction(std::string Name);
 	};
 
 	//'+','-','*','/'二元运算表达式抽象语法树
-	class BinaryExprAST : public ExprAST {
+	class BinaryExprAST : public StatAST {
 		char Op;
-		std::unique_ptr<ExprAST> LHS, RHS;
+		std::unique_ptr<StatAST> LHS, RHS;
 
 	public:
-		BinaryExprAST(char Op, std::unique_ptr<ExprAST> LHS,
-			std::unique_ptr<ExprAST> RHS)
+		BinaryExprAST(char Op, std::unique_ptr<StatAST> LHS,
+			std::unique_ptr<StatAST> RHS)
 			: Op(Op), LHS(std::move(LHS)), RHS(std::move(RHS)) {}
 
 
@@ -167,7 +173,6 @@ Function *getFunction(std::string Name);
 			return F;
 		}
 	};
-
 	//函数抽象语法树
 	class FunctionAST {
 		std::unique_ptr<PrototypeAST> Proto;
@@ -178,9 +183,6 @@ Function *getFunction(std::string Name);
 			std::unique_ptr<StatAST> Body)
 			: Proto(std::move(Proto)), Body(std::move(Body)) {}
 
-		/*
-		* 待重构：如上
-		*/
 		Function * codegen() {
 			//可在当前模块中获取任何先前声明的函数的函数声明
 			auto &P = *Proto;
@@ -198,19 +200,18 @@ Function *getFunction(std::string Name);
 			for (auto &Arg : TheFunction->args())
 				NamedValues[Arg.getName()] = &Arg;
 
-			/*Body->codegen();*/
-			//if (Value *RetVal = Body->codegen()) {
-			//	// Finish off the function.
-			//	Builder.CreateRet(RetVal);
+			if (Value *RetVal = Body->codegen()) {
+				// Finish off the function.
+				Builder.CreateRet(RetVal);
 
-			//	// Validate the generated code, checking for consistency.
-			//	verifyFunction(*TheFunction);
+				// Validate the generated code, checking for consistency.
+				verifyFunction(*TheFunction);
 
-			//	// Run the optimizer on the function.
-			//	TheFPM->run(*TheFunction);
+				// Run the optimizer on the function.
+				TheFPM->run(*TheFunction);
 
-			//	return TheFunction;
-			//}
+				return TheFunction;
+			}
 
 			// Error reading body, remove function.
 			TheFunction->eraseFromParent();
@@ -219,12 +220,12 @@ Function *getFunction(std::string Name);
 	};
 
 	//函数调用抽象语法树
-	class CallExprAST : public ExprAST {
+	class CallExprAST : public StatAST {
 		std::string Callee;
-		std::vector<std::unique_ptr<ExprAST>> Args;
+		std::vector<std::unique_ptr<StatAST>> Args;
 	public:
 		CallExprAST(const std::string &Callee,
-			std::vector<std::unique_ptr<ExprAST>> Args)
+			std::vector<std::unique_ptr<StatAST>> Args)
 			: Callee(Callee), Args(std::move(Args)) {}
 
 		Value * codegen() {
@@ -259,37 +260,71 @@ Function *getFunction(std::string Name);
 
 	/*statement部分 -- lh*/
 	//statement 基类
-	class StatAST {
-	public:
-		virtual ~StatAST() = default;
-		virtual Value* codegen() = 0;
-	};
+
 
 	//not mine
-	class DecAST : public StatAST {};
+	class DecAST : public StatAST
+	{
+        public:
+        Value *codegen()
+            {
+                return nullptr;
+            }
+	};
 
 	//块语句
 	class BlockStatAST : public StatAST {
 		std::vector<std::unique_ptr<DecAST>> DecList;
 		std::vector<std::unique_ptr<StatAST>> StatList;
+
+		public:
+		Value *codegen()
+		{
+		return nullptr;
+		}
 	};
 
-	//Text
+	//Text //暂时不用--MT
 	class TextAST {
 
 	};
 
-	class PrinStatAST : public StatAST {
+	class PrintStatAST : public StatAST {
+        std::string text;
+        std::vector<std::string> expr;
+    public:
+        PrintStatAST(std::string text, std::vector<std::string> expr):
+            text(text), expr(expr){}
+        Value *codegen()
+        {
+            std::vector<llvm::Type *> printf_arg_types;
+            printf_arg_types.push_back(Builder.getInt8Ty()->getPointerTo());
+            FunctionType * printType = FunctionType::get(
+                IntegerType::getInt32Ty(TheContext),printf_arg_types, true);
+            Function *printFunc = llvm::Function::Create(printType, llvm::Function::ExternalLinkage,
+                llvm::Twine("printf"), TheModule.get());
+            printFunc->setCallingConv(llvm::CallingConv::C);
 
+            std::vector<std::string> ArgNames;
+            FunctionProtos["printf"] = std::move(llvm::make_unique<PrototypeAST>("printf", std::move(ArgNames)));
+
+            std::vector<llvm::Value *> paramArrayRef;
+            Value *intFormat = Builder.CreateGlobalStringPtr(text);
+            Value *num = Builder.getInt32(0);
+            paramArrayRef.push_back(intFormat);
+            Builder.CreateCall(printFunc, paramArrayRef);
+
+            return num;
+        }
 	};
 
 	//IF Statement
 	class IfStatAST : public StatAST {
-		std::unique_ptr<ExprAST> Cond;
+		std::unique_ptr<StatAST> Cond;
 		std::unique_ptr<StatAST> Then, Else;
 
 	public:
-		IfStatAST(std::unique_ptr<ExprAST> Cond, std::unique_ptr<StatAST> Then,
+		IfStatAST(std::unique_ptr<StatAST> Cond, std::unique_ptr<StatAST> Then,
 			std::unique_ptr<StatAST> Else)
 			: Cond(std::move(Cond)), Then(std::move(Then)), Else(std::move(Else)) {}
 
@@ -316,7 +351,7 @@ Function *getFunction(std::string Name);
 			else {
 				Builder.CreateCondBr(CondV, ThenBB, MergeBB);
 			}
-			
+
 			// Emit then value.
 			Builder.SetInsertPoint(ThenBB);
 
@@ -345,7 +380,7 @@ Function *getFunction(std::string Name);
 			// Emit merge block.
 			TheFunction->getBasicBlockList().push_back(MergeBB);
 			Builder.SetInsertPoint(MergeBB);
-			
+
 			return nullptr;
 		}
 

@@ -10,18 +10,18 @@ static int CurTok;
 static std::map<char, int> BinopPrecedence;
 static int getNextToken() { return CurTok = gettok(); }
 
-static std::unique_ptr<ExprAST> ParseExpression();
-std::unique_ptr<ExprAST> LogError(const char *Str);
-static std::unique_ptr<ExprAST> ParseNumberExpr();
-static std::unique_ptr<ExprAST> ParseParenExpr();
-std::unique_ptr<ExprAST> LogError(const char *Str);
+static std::unique_ptr<StatAST> ParseExpression();
+std::unique_ptr<StatAST> LogError(const char *Str);
+static std::unique_ptr<StatAST> ParseNumberExpr();
+static std::unique_ptr<StatAST> ParseParenExpr();
+std::unique_ptr<StatAST> LogError(const char *Str);
 std::unique_ptr<PrototypeAST> LogErrorP(const char *Str);
 std::unique_ptr<StatAST> LogErrorS(const char *Str);
 static std::unique_ptr<StatAST> ParseStatement();
 
 //解析如下格式的表达式：
 // identifer || identifier(expression list)
-static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
+static std::unique_ptr<StatAST> ParseIdentifierExpr() {
 	std::string IdName = IdentifierStr;
 
 	getNextToken();
@@ -32,7 +32,7 @@ static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
 
 	// 解析成函数调用表达式
 	getNextToken();
-	std::vector<std::unique_ptr<ExprAST>> Args;
+	std::vector<std::unique_ptr<StatAST>> Args;
 	if (CurTok != ')') {
 		while (true) {
 			if (auto Arg = ParseExpression())
@@ -44,7 +44,7 @@ static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
 				break;
 
 			if (CurTok != ',')
-				return LogError("Expected ')' or ',' in argument list");
+				return LogErrorS("Expected ')' or ',' in argument list");
 			getNextToken();
 		}
 	}
@@ -56,7 +56,7 @@ static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
 
 
 //解析成 标识符表达式、整数表达式、括号表达式中的一种
-static std::unique_ptr<ExprAST> ParsePrimary() {
+static std::unique_ptr<StatAST> ParsePrimary() {
 	switch (CurTok) {
 	default:
 		return LogError("unknown token when expecting an expression");
@@ -86,8 +86,8 @@ static int GetTokPrecedence() {
 //ExprPrec 左部运算符优先级
 //LHS 左部操作数
 // 递归得到可以结合的右部，循环得到一个整体二元表达式
-static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
-	std::unique_ptr<ExprAST> LHS) {
+static std::unique_ptr<StatAST> ParseBinOpRHS(int ExprPrec,
+	std::unique_ptr<StatAST> LHS) {
 
 	while (true) {
 		int TokPrec = GetTokPrecedence();
@@ -123,7 +123,7 @@ static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
 }
 
 // 解析得到表达式
-static std::unique_ptr<ExprAST> ParseExpression() {
+static std::unique_ptr<StatAST> ParseExpression() {
 	auto LHS = ParsePrimary();
 	if (!LHS)
 		return nullptr;
@@ -132,7 +132,7 @@ static std::unique_ptr<ExprAST> ParseExpression() {
 }
 
 // numberexpr ::= number
-static std::unique_ptr<ExprAST> ParseNumberExpr() {
+static std::unique_ptr<StatAST> ParseNumberExpr() {
 	auto Result = llvm::make_unique<NumberExprAST>(NumberVal);
 	//略过数字获取下一个输入
 	getNextToken();
@@ -175,28 +175,28 @@ static std::unique_ptr<FunctionAST> ParseFunc()
 	auto Proto = ParsePrototype();
 	if (!Proto)
 		return nullptr;
-	if (CurTok != '{')
+	/*if (CurTok != '{')
 	{
 		LogErrorP("Expected '{' in function");
 		return nullptr;
 	}
-	getNextToken();
+	getNextToken();*/
 
 	auto E = ParseStatement();
 	if (!E)
 		return nullptr;
-	if (CurTok != '}')
+	/*if (CurTok != '}')
 	{
 		LogErrorP("Expected '}' in function");
 		return nullptr;
 	}
-	getNextToken();
+	getNextToken();*/
 
 	return llvm::make_unique<FunctionAST>(std::move(Proto), std::move(E));
 }
 
 //解析括号中的表达式
-static std::unique_ptr<ExprAST> ParseParenExpr() {
+static std::unique_ptr<StatAST> ParseParenExpr() {
 	// 过滤'('
 	getNextToken();
 	auto V = ParseExpression();
@@ -229,6 +229,7 @@ static std::unique_ptr<StatAST> ParseIfStat() {
 
 	std::unique_ptr<StatAST> Else = nullptr;
 	if (CurTok == ELSE) {
+        getNextToken();
 		Else = ParseStatement();
 		if (!Else)
 			return nullptr;
@@ -242,11 +243,38 @@ static std::unique_ptr<StatAST> ParseIfStat() {
 		std::move(Else));
 }
 
+//简单版PRINT
+static std::unique_ptr<StatAST> ParsePrintStat()
+{
+    std::string text = "";
+    std::vector<std::string> expr;
+    getNextToken();//eat PRINT
+
+    while(CurTok == VARIABLE || CurTok == TEXT)
+    {
+        if(CurTok == TEXT)
+            text += IdentifierStr;
+        else if(CurTok == VARIABLE)//只是简单的处理了变量,函数的待处理
+        {
+            text += " %d ";
+            expr.push_back(IdentifierStr);
+        }
+
+        getNextToken();
+        if(CurTok != ',')
+            break;
+    }
+
+    return llvm::make_unique<PrintStatAST>(text, expr);
+}
+
 static std::unique_ptr<StatAST> ParseStatement() {
 	switch (CurTok) {
 		case IF:
 			return ParseIfStat();
 			break;
+        case PRINT:
+            return ParsePrintStat();
 		default:
 			return nullptr;
 	}
@@ -267,7 +295,7 @@ static std::unique_ptr<ProgramAST> ParseProgramAST() {
 }
 
 //错误信息打印
-std::unique_ptr<ExprAST> LogError(const char *Str) {
+std::unique_ptr<StatAST> LogError(const char *Str) {
 	fprintf(stderr, "Error: %s\n", Str);
 	return nullptr;
 }
@@ -299,7 +327,7 @@ static void HandleFuncDefinition() {
 
 /// toplevelexpr ::= expression
 static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
-  if (auto E = ParseStatement()) {
+  if (auto E = ParseExpression()) {
     // Make an anonymous proto.
     auto Proto = llvm::make_unique<PrototypeAST>("__anon_expr",
                                                  std::vector<std::string>());
