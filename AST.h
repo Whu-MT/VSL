@@ -44,7 +44,7 @@ Function *getFunction(std::string Name);
 	static LLVMContext TheContext;
 	static IRBuilder<> Builder(TheContext);
 	static std::unique_ptr<Module> TheModule;
-	static std::map<std::string, Value *> NamedValues;
+	static std::map<std::string, AllocaInst *> NamedValues;
 	static std::unique_ptr<legacy::FunctionPassManager> TheFPM;
 	static std::unique_ptr<KaleidoscopeJIT> TheJIT;
 	//包含每个元素的最新原型
@@ -167,6 +167,16 @@ Function *getFunction(std::string Name);
 		}
 	};
 
+	// CreateEntryBlockAlloca - Create an alloca instruction in the entry block of
+	// the function.  This is used for mutable variables etc.
+	static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
+		const std::string &VarName) {
+		IRBuilder<> TmpB(&TheFunction->getEntryBlock(),
+			TheFunction->getEntryBlock().begin());
+		return TmpB.CreateAlloca(Type::getDoubleTy(TheContext), nullptr,
+			VarName.c_str());
+	}
+
 	//函数抽象语法树
 	class FunctionAST {
 		std::unique_ptr<PrototypeAST> Proto;
@@ -194,8 +204,16 @@ Function *getFunction(std::string Name);
 
 			// Record the function arguments in the NamedValues map.
 			NamedValues.clear();
-			for (auto &Arg : TheFunction->args())
-				NamedValues[Arg.getName()] = &Arg;
+			for (auto &Arg : TheFunction->args()) {
+				// Create an alloca for this variable.
+				AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, Arg.getName());
+
+				// Store the initial value into the alloca.
+				Builder.CreateStore(&Arg, Alloca);
+
+				// Add arguments to variable symbol table.
+				NamedValues[Arg.getName()] = Alloca;
+			}
 
 			if (Value *RetVal = Body->codegen()) {
 				// Finish off the function.
@@ -246,6 +264,7 @@ Function *getFunction(std::string Name);
 		}
 	};
 
+
 	//程序的抽象语法树
 	class ProgramAST {
 		std::vector<std::unique_ptr<FunctionAST>> funcs;
@@ -262,8 +281,42 @@ Function *getFunction(std::string Name);
 		virtual ~StatAST() = default;
 	};
 
-	//not mine
-	class DecAST : public StatAST {};
+	//变量声明语句 
+	class DecAST : public ExprAST {
+		std::vector<std::string> VarNames;
+		std::unique_ptr<ExprAST> Body;
+
+	public:
+		DecAST(std::vector<std::string> VarNames, std::unique_ptr<ExprAST> Body)
+			:VarNames(std::move(VarNames)),Body(std::move(Body)){}
+
+		Value *codegen() {
+			std::vector<AllocaInst *> OldBindings;
+
+			Function *TheFunction = Builder.GetInsertBlock()->getParent();
+
+			for (unsigned i = 0, e = VarNames.size(); i != e; ++i) {
+				const std::string &VarName = VarNames[i];
+
+				Value *InitVal= ConstantFP::get(TheContext, APFloat(0.0));
+
+				AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, VarName);
+				Builder.CreateStore(InitVal, Alloca);
+
+				OldBindings.push_back(NamedValues[VarName]);
+				NamedValues[VarName] = Alloca;
+			}
+
+			Value *BodyVal = Body->codegen();
+			if (!BodyVal)
+				return nullptr;
+
+			for (unsigned i = 0, e = VarNames.size(); i != e; ++i)
+				NamedValues[VarNames[i]] = OldBindings[i];
+
+			return BodyVal;
+		}	
+	};
 
 	//块语句
 	class BlockStatAST : public StatAST {

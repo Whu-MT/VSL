@@ -14,6 +14,7 @@ static std::unique_ptr<ExprAST> ParseExpression();
 std::unique_ptr<ExprAST> LogError(const char *Str);
 static std::unique_ptr<ExprAST> ParseNumberExpr();
 static std::unique_ptr<ExprAST> ParseParenExpr();
+static std::unique_ptr<ExprAST> ParseDec();
 std::unique_ptr<ExprAST> LogError(const char *Str);
 std::unique_ptr<PrototypeAST> LogErrorP(const char *Str);
 
@@ -64,6 +65,8 @@ static std::unique_ptr<ExprAST> ParsePrimary() {
 		return ParseNumberExpr();
 	case '(':
 		return ParseParenExpr();
+	case VAR:
+		return ParseDec();
 	}
 }
 
@@ -135,6 +138,38 @@ static std::unique_ptr<ExprAST> ParseNumberExpr() {
 	//略过数字获取下一个输入
 	getNextToken();
 	return std::move(Result);
+}
+
+//declaration::=VAR variable_list
+static std::unique_ptr<ExprAST> ParseDec() {
+	//eat 'VAR'
+	getNextToken();
+
+	std::vector<std::string> varNames;
+	//保证至少有一个变量的名字
+	if (CurTok != VARIABLE) {
+		return LogError("expected identifier after VAR");
+	}
+
+	while (true)
+	{
+		varNames.push_back(IdentifierStr);
+		//eat VARIABLE
+		getNextToken();
+		if (CurTok != ',')
+			break;
+		getNextToken();
+		if (CurTok != VARIABLE) {
+			return LogError("expected identifier list after VAR");
+		}
+	}
+
+	auto Body = ParsePrimary();
+	if (!Body) {
+		return nullptr;
+	}
+
+	return llvm::make_unique<DecAST>(std::move(varNames), std::move(Body));
 }
 
 //prototype ::= VARIABLE '(' parameter_list ')'
@@ -302,6 +337,8 @@ static void MainLoop() {
 			case FUNC:
 		 		HandleFuncDefinition();
 				break;
+			case VAR:
+
 			default:
 				HandleTopLevelExpression();
 				break;
