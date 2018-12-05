@@ -14,9 +14,11 @@ static std::unique_ptr<ExprAST> ParseExpression();
 std::unique_ptr<ExprAST> LogError(const char *Str);
 static std::unique_ptr<ExprAST> ParseNumberExpr();
 static std::unique_ptr<ExprAST> ParseParenExpr();
-static std::unique_ptr<ExprAST> ParseDec();
+static std::unique_ptr<StatAST> ParseDec();
 std::unique_ptr<ExprAST> LogError(const char *Str);
 std::unique_ptr<PrototypeAST> LogErrorP(const char *Str);
+std::unique_ptr<StatAST> LogErrorS(const char *Str);
+static std::unique_ptr<StatAST> ParseStatement();
 
 //解析如下格式的表达式：
 // identifer || identifier(expression list)
@@ -65,8 +67,6 @@ static std::unique_ptr<ExprAST> ParsePrimary() {
 		return ParseNumberExpr();
 	case '(':
 		return ParseParenExpr();
-	case VAR:
-		return ParseDec();
 	}
 }
 
@@ -141,14 +141,14 @@ static std::unique_ptr<ExprAST> ParseNumberExpr() {
 }
 
 //declaration::=VAR variable_list
-static std::unique_ptr<ExprAST> ParseDec() {
+static std::unique_ptr<StatAST> ParseDec() {
 	//eat 'VAR'
 	getNextToken();
 
 	std::vector<std::string> varNames;
 	//保证至少有一个变量的名字
 	if (CurTok != VARIABLE) {
-		return LogError("expected identifier after VAR");
+		return LogErrorS("expected identifier after VAR");
 	}
 
 	while (true)
@@ -160,14 +160,11 @@ static std::unique_ptr<ExprAST> ParseDec() {
 			break;
 		getNextToken();
 		if (CurTok != VARIABLE) {
-			return LogError("expected identifier list after VAR");
+			return LogErrorS("expected identifier list after VAR");
 		}
 	}
 
-	auto Body = ParsePrimary();
-	if (!Body) {
-		return nullptr;
-	}
+	auto Body = nullptr;
 
 	return llvm::make_unique<DecAST>(std::move(varNames), std::move(Body));
 }
@@ -215,7 +212,7 @@ static std::unique_ptr<FunctionAST> ParseFunc()
 	}
 	getNextToken();
 
-	auto E = ParseExpression();
+	auto E = ParseStatement();
 	if (!E)
 		return nullptr;
 	if (CurTok != '}')
@@ -243,6 +240,82 @@ static std::unique_ptr<ExprAST> ParseParenExpr() {
 	return V;
 }
 
+//解析 IF Statement
+static std::unique_ptr<StatAST> ParseIfStat() {
+	getNextToken(); // eat the IF.
+
+					// condition.
+	auto Cond = ParseExpression();
+	if (!Cond)
+		return nullptr;
+
+	if (CurTok != THEN)
+		return LogErrorS("expected THEN");
+	getNextToken(); // eat the THEN
+
+	auto Then = ParseStatement();
+	if (!Then)
+		return nullptr;
+
+	std::unique_ptr<StatAST> Else = nullptr;
+	if (CurTok == ELSE) {
+		Else = ParseStatement();
+		if (!Else)
+			return nullptr;
+	}
+	else if(CurTok != FI)
+		return LogErrorS("expected FI or ELSE");
+
+	getNextToken();
+
+	return llvm::make_unique<IfStatAST>(std::move(Cond), std::move(Then),
+		std::move(Else));
+}
+
+//解析 RETURN Statement
+static std::unique_ptr<StatAST> ParseRetStat() {
+	getNextToken();
+	auto Val = ParseExpression();
+	if (!Val)
+		return nullptr;
+
+	return llvm::make_unique<RetStatAST>(std::move(Val));
+}
+
+//解析 赋值语句
+static std::unique_ptr<StatAST> ParseAssStat() {
+	auto a = ParseIdentifierExpr();
+	VariableExprAST* Name = (VariableExprAST*)a.get();
+	auto NameV = llvm::make_unique<VariableExprAST>(Name->getName());
+	if (!Name)
+		return nullptr;
+	if (CurTok != '=')
+		return LogErrorS("need =");
+	getNextToken();
+	
+	auto Expression = ParseExpression();
+	if (!Expression)
+		return nullptr;
+
+	return llvm::make_unique<AssStatAST>(std::move(NameV), std::move(Expression));
+}
+
+static std::unique_ptr<StatAST> ParseStatement() {
+	switch (CurTok) {
+		case IF:
+			return ParseIfStat();
+			break;
+		case RETURN:
+			return ParseRetStat();
+		case VAR:
+			return ParseDec();
+			break;
+		default:
+			auto E = ParseAssStat();
+			return E;
+	}
+}
+
 //解析程序结构
 static std::unique_ptr<ProgramAST> ParseProgramAST() {
 	//接受程序中函数的语法树
@@ -266,6 +339,10 @@ std::unique_ptr<PrototypeAST> LogErrorP(const char *Str) {
 	LogError(Str);
 	return nullptr;
 }
+std::unique_ptr<StatAST> LogErrorS(const char *Str) {
+	fprintf(stderr, "Error: %s\n", Str);
+	return nullptr;
+}
 
 // Top-Level parsing
 static void HandleFuncDefinition() {
@@ -274,7 +351,7 @@ static void HandleFuncDefinition() {
 			fprintf(stderr, "Read function definition:");
 			FnIR->print(errs());
 			fprintf(stderr, "\n");
-			TheJIT->addModule(std::move(TheModule));
+			//TheJIT->addModule(std::move(TheModule));
 			InitializeModuleAndPassManager();
 		}
 	}
@@ -286,7 +363,7 @@ static void HandleFuncDefinition() {
 
 /// toplevelexpr ::= expression
 static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
-  if (auto E = ParseExpression()) {
+  if (auto E = ParseStatement()) {
     // Make an anonymous proto.
     auto Proto = llvm::make_unique<PrototypeAST>("__anon_expr",
                                                  std::vector<std::string>());
@@ -326,6 +403,7 @@ static void HandleTopLevelExpression() {
 
 //program ::= definition | expression
 static void MainLoop() {
+
 	while (true) {
 		fprintf(stderr, "ready> ");
 		switch (CurTok) {

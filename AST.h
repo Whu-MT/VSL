@@ -39,12 +39,16 @@ using namespace llvm::orc;
 
 class PrototypeAST;
 Function *getFunction(std::string Name);
+static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
+	const std::string &VarName);
 
 	//IR 部分
 	static LLVMContext TheContext;
 	static IRBuilder<> Builder(TheContext);
 	static std::unique_ptr<Module> TheModule;
+
 	static std::map<std::string, AllocaInst *> NamedValues;
+
 	static std::unique_ptr<legacy::FunctionPassManager> TheFPM;
 	static std::unique_ptr<KaleidoscopeJIT> TheJIT;
 	//包含每个元素的最新原型
@@ -82,6 +86,10 @@ Function *getFunction(std::string Name);
 		std::string Name;
 
 	public:
+		std::string getName() {
+			return Name;
+		}
+
 		VariableExprAST(const std::string &Name) : Name(Name) {}
 
 		Value * codegen() {
@@ -105,6 +113,7 @@ Function *getFunction(std::string Name);
 
 
 		Value * codegen() {
+
 			Value *L = LHS->codegen();
 			Value *R = RHS->codegen();
 			if (!L || !R)
@@ -173,18 +182,183 @@ Function *getFunction(std::string Name);
 		const std::string &VarName) {
 		IRBuilder<> TmpB(&TheFunction->getEntryBlock(),
 			TheFunction->getEntryBlock().begin());
-		return TmpB.CreateAlloca(Type::getDoubleTy(TheContext), nullptr,
+		return TmpB.CreateAlloca(Type::getInt32Ty(TheContext), nullptr,
 			VarName.c_str());
 	}
+
+	/*statement部分 -- lh*/
+	//statement 基类
+	class StatAST {
+	public:
+		virtual ~StatAST() = default;
+		virtual Value* codegen() = 0;
+	};
+
+	//变量声明语句 
+	class DecAST : public StatAST {
+		std::vector<std::string> VarNames;
+		std::unique_ptr<ExprAST> Body;
+
+	public:
+		DecAST(std::vector<std::string> VarNames, std::unique_ptr<ExprAST> Body)
+			:VarNames(std::move(VarNames)), Body(std::move(Body)) {}
+
+		Value *codegen() {
+			std::vector<AllocaInst *> OldBindings;
+
+			Function *TheFunction = Builder.GetInsertBlock()->getParent();
+
+			for (unsigned i = 0, e = VarNames.size(); i != e; ++i) {
+				const std::string &VarName = VarNames[i];
+
+				Value *InitVal = ConstantFP::get(TheContext, APFloat(0.0));
+
+				AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, VarName);
+				Builder.CreateStore(InitVal, Alloca);
+
+				OldBindings.push_back(NamedValues[VarName]);
+				NamedValues[VarName] = Alloca;
+			}
+
+			//Value *BodyVal = Body->codegen();
+			//if (!BodyVal)
+			//	return nullptr;
+
+			for (unsigned i = 0, e = VarNames.size(); i != e; ++i)
+				NamedValues[VarNames[i]] = OldBindings[i];
+
+			return nullptr;
+		}
+	};
+
+	//块语句
+	class BlockStatAST : public StatAST {
+		std::vector<std::unique_ptr<DecAST>> DecList;
+		std::vector<std::unique_ptr<StatAST>> StatList;
+	};
+
+	//Text
+	class TextAST {
+
+	};
+
+	class PrinStatAST : public StatAST {
+
+	};
+
+	//IF Statement
+	class IfStatAST : public StatAST {
+		std::unique_ptr<ExprAST> Cond;
+		std::unique_ptr<StatAST> Then, Else;
+
+	public:
+		IfStatAST(std::unique_ptr<ExprAST> Cond, std::unique_ptr<StatAST> Then,
+			std::unique_ptr<StatAST> Else)
+			: Cond(std::move(Cond)), Then(std::move(Then)), Else(std::move(Else)) {}
+
+		Value *codegen() {
+			Value *CondV = Cond->codegen();
+			if (!CondV)
+				return nullptr;
+
+			// Convert condition to a bool by comparing non-equal to 0.0.
+			CondV = Builder.CreateFCmpONE(
+				CondV, ConstantFP::get(TheContext, APFloat(0.0)), "ifcond");
+
+			Function *TheFunction = Builder.GetInsertBlock()->getParent();
+
+			// Create blocks for the then and else cases.  Insert the 'then' block at the
+			// end of the function.
+			BasicBlock *ThenBB = BasicBlock::Create(TheContext, "then", TheFunction);
+			BasicBlock *MergeBB = BasicBlock::Create(TheContext, "ifcont");
+			BasicBlock *ElseBB = nullptr;
+			if (Else != nullptr) {
+				ElseBB = BasicBlock::Create(TheContext, "else");
+				Builder.CreateCondBr(CondV, ThenBB, ElseBB);
+			}
+			else {
+				Builder.CreateCondBr(CondV, ThenBB, MergeBB);
+			}
+			
+			// Emit then value.
+			Builder.SetInsertPoint(ThenBB);
+
+			Value *ThenV = Then->codegen();
+			if (!ThenV)
+				return nullptr;
+
+			Builder.CreateBr(MergeBB);
+			// Codegen of 'Then' can change the current block, update ThenBB for the PHI.
+			ThenBB = Builder.GetInsertBlock();
+
+			// Emit else block.
+			if (ElseBB != nullptr) {
+				TheFunction->getBasicBlockList().push_back(ElseBB);
+				Builder.SetInsertPoint(ElseBB);
+
+				Value *ElseV = Else->codegen();
+				if (!ElseV)
+					return nullptr;
+				Builder.CreateBr(MergeBB);
+
+				// Codegen of 'Else' can change the current block, update ElseBB for the PHI.
+				ElseBB = Builder.GetInsertBlock();
+			}
+
+			// Emit merge block.
+			TheFunction->getBasicBlockList().push_back(MergeBB);
+			Builder.SetInsertPoint(MergeBB);
+			
+			return nullptr;
+		}
+
+	};
+
+	class RetStatAST : public StatAST {
+		std::unique_ptr<ExprAST> Val;
+
+		public:
+			RetStatAST(std::unique_ptr<ExprAST> Val)
+				: Val(std::move(Val)) {}
+
+			Value *codegen() {
+				if (Value *RetVal = Val->codegen()) {
+					return Builder.CreateRet(RetVal);
+				}
+			}
+	};
+
+	class AssStatAST : public StatAST {
+		std::unique_ptr<VariableExprAST> Name;
+		std::unique_ptr<ExprAST> Expression;
+
+	public:
+		AssStatAST(std::unique_ptr<VariableExprAST> Name, std::unique_ptr<ExprAST> Expression)
+			: Name(std::move(Name)), Expression(std::move(Expression)) {}
+
+		Value *codegen() {
+			Value* EValue = Expression->codegen();
+			if (!EValue)
+				return nullptr;
+
+			Value *Variable = NamedValues[Name->getName()];
+			if (!Variable)
+				return LogErrorV("Unknown variable name");
+
+			Builder.CreateStore(EValue, Variable);
+
+			return EValue;
+		}
+	};
 
 	//函数抽象语法树
 	class FunctionAST {
 		std::unique_ptr<PrototypeAST> Proto;
-		std::unique_ptr<ExprAST> Body;
+		std::unique_ptr<StatAST> Body;
 
 	public:
 		FunctionAST(std::unique_ptr<PrototypeAST> Proto,
-			std::unique_ptr<ExprAST> Body)
+			std::unique_ptr<StatAST> Body)
 			: Proto(std::move(Proto)), Body(std::move(Body)) {}
 
 		/*
@@ -205,6 +379,7 @@ Function *getFunction(std::string Name);
 			// Record the function arguments in the NamedValues map.
 			NamedValues.clear();
 			for (auto &Arg : TheFunction->args()) {
+
 				// Create an alloca for this variable.
 				AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, Arg.getName());
 
@@ -215,22 +390,23 @@ Function *getFunction(std::string Name);
 				NamedValues[Arg.getName()] = Alloca;
 			}
 
-			if (Value *RetVal = Body->codegen()) {
-				// Finish off the function.
-				Builder.CreateRet(RetVal);
+			Body->codegen();
+			//if (Value *RetVal = Body->codegen()) {
+			//	// Finish off the function.
+			//	Builder.CreateRet(RetVal);
 
-				// Validate the generated code, checking for consistency.
-				verifyFunction(*TheFunction);
+			//	// Validate the generated code, checking for consistency.
+			//	verifyFunction(*TheFunction);
 
-				// Run the optimizer on the function.
-				TheFPM->run(*TheFunction);
+			//	// Run the optimizer on the function.
+			//	TheFPM->run(*TheFunction);
 
-				return TheFunction;
-			}
+			//	return TheFunction;
+			//}
 
 			// Error reading body, remove function.
-			TheFunction->eraseFromParent();
-			return nullptr;
+			/*TheFunction->eraseFromParent();*/
+			return TheFunction;
 		}
 	};
 
@@ -274,64 +450,6 @@ Function *getFunction(std::string Name);
 			:funcs(std::move(funcs)) {}
 	};
 
-	/*statement部分 -- lh*/
-	//statement 基类
-	class StatAST {
-	public:
-		virtual ~StatAST() = default;
-	};
-
-	//变量声明语句 
-	class DecAST : public ExprAST {
-		std::vector<std::string> VarNames;
-		std::unique_ptr<ExprAST> Body;
-
-	public:
-		DecAST(std::vector<std::string> VarNames, std::unique_ptr<ExprAST> Body)
-			:VarNames(std::move(VarNames)),Body(std::move(Body)){}
-
-		Value *codegen() {
-			std::vector<AllocaInst *> OldBindings;
-
-			Function *TheFunction = Builder.GetInsertBlock()->getParent();
-
-			for (unsigned i = 0, e = VarNames.size(); i != e; ++i) {
-				const std::string &VarName = VarNames[i];
-
-				Value *InitVal= ConstantFP::get(TheContext, APFloat(0.0));
-
-				AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, VarName);
-				Builder.CreateStore(InitVal, Alloca);
-
-				OldBindings.push_back(NamedValues[VarName]);
-				NamedValues[VarName] = Alloca;
-			}
-
-			Value *BodyVal = Body->codegen();
-			if (!BodyVal)
-				return nullptr;
-
-			for (unsigned i = 0, e = VarNames.size(); i != e; ++i)
-				NamedValues[VarNames[i]] = OldBindings[i];
-
-			return BodyVal;
-		}	
-	};
-
-	//块语句
-	class BlockStatAST : public StatAST {
-		std::vector<std::unique_ptr<DecAST>> DecList;
-		std::vector<std::unique_ptr<StatAST>> StatList;
-	};
-
-	//Text
-	class TextAST {
-
-	};
-
-	class PrinStatAST : public StatAST {
-
-	};
 
 	//创建和初始化模块和传递管理器
 	static void InitializeModuleAndPassManager() {
@@ -343,6 +461,8 @@ Function *getFunction(std::string Name);
 		// Create a new pass manager attached to it.
 		TheFPM = llvm::make_unique<legacy::FunctionPassManager>(TheModule.get());
 
+		// Promote allocas to registers.
+		TheFPM->add(createPromoteMemoryToRegisterPass());
 		// Do simple "peephole" optimizations and bit-twiddling optzns.
 		TheFPM->add(createInstructionCombiningPass());
 		// Reassociate expressions.
