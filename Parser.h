@@ -54,6 +54,15 @@ static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
 	return llvm::make_unique<CallExprAST>(IdName, std::move(Args));
 }
 
+//解析取反表达式
+static std::unique_ptr<ExprAST> ParseNegExpr() {
+	getNextToken();
+	std::unique_ptr<ExprAST> Exp = ParseExpression();
+	if (!Exp)
+		return nullptr;
+
+	return llvm::make_unique<NegExprAST>(std::move(Exp));
+}
 
 //解析成 标识符表达式、整数表达式、括号表达式中的一种
 static std::unique_ptr<ExprAST> ParsePrimary() {
@@ -66,6 +75,8 @@ static std::unique_ptr<ExprAST> ParsePrimary() {
 		return ParseNumberExpr();
 	case '(':
 		return ParseParenExpr();
+	case '-':
+		return ParseNegExpr();
 	}
 }
 

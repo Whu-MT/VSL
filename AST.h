@@ -95,8 +95,25 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 			Value *V = NamedValues[Name];
 			if (!V)
 				return LogErrorV("Unknown variable name");
-			return V;
+			return Builder.CreateLoad(V, Name.c_str());
 		}
+	};
+
+	class NegExprAST : public ExprAST {
+		std::unique_ptr<ExprAST> EXP;
+
+		public:
+			NegExprAST(std::unique_ptr<ExprAST> EXP) 
+				: EXP(std::move(EXP)) {
+			}
+
+			Value * codegen() {
+				auto Value = EXP->codegen();
+				if (!Value)
+					return nullptr;
+
+				return Builder.CreateNeg(Value);
+			}
 	};
 
 	//'+','-','*','/'二元运算表达式抽象语法树
