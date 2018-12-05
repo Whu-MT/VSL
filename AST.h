@@ -4,6 +4,8 @@
 #include "Lexer.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/APSInt.h"
+#include "llvm/ADT/APInt.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
@@ -38,14 +40,17 @@ using namespace llvm;
 using namespace llvm::orc;
 
 class PrototypeAST;
-class StatAST;
 Function *getFunction(std::string Name);
+static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
+	const std::string &VarName);
 
 	//IR 部分
 	static LLVMContext TheContext;
 	static IRBuilder<> Builder(TheContext);
 	static std::unique_ptr<Module> TheModule;
-	static std::map<std::string, Value *> NamedValues;
+
+	static std::map<std::string, AllocaInst *> NamedValues;
+
 	static std::unique_ptr<legacy::FunctionPassManager> TheFPM;
 	static std::unique_ptr<KaleidoscopeJIT> TheJIT;
 	//包含每个元素的最新原型
@@ -58,6 +63,8 @@ Function *getFunction(std::string Name);
 		virtual Value *codegen() = 0;
 	};
 
+	/*statement部分 -- lh*/
+	//statement 基类
 	class StatAST {
 	public:
 		virtual ~StatAST() = default;
@@ -89,6 +96,10 @@ Function *getFunction(std::string Name);
 		std::string Name;
 
 	public:
+		std::string getName() {
+			return Name;
+		}
+
 		VariableExprAST(const std::string &Name) : Name(Name) {}
 
 		Value * codegen() {
@@ -96,8 +107,25 @@ Function *getFunction(std::string Name);
 			Value *V = NamedValues[Name];
 			if (!V)
 				return LogErrorV("Unknown variable name");
-			return V;
+			return Builder.CreateLoad(V, Name.c_str());
 		}
+	};
+
+	class NegExprAST : public StatAST {
+		std::unique_ptr<StatAST> EXP;
+
+		public:
+			NegExprAST(std::unique_ptr<StatAST> EXP)
+				: EXP(std::move(EXP)) {
+			}
+
+			Value * codegen() {
+				auto Value = EXP->codegen();
+				if (!Value)
+					return nullptr;
+
+				return Builder.CreateNeg(Value);
+			}
 	};
 
 	//'+','-','*','/'二元运算表达式抽象语法树
@@ -112,6 +140,7 @@ Function *getFunction(std::string Name);
 
 
 		Value * codegen() {
+
 			Value *L = LHS->codegen();
 			Value *R = RHS->codegen();
 			if (!L || !R)
@@ -173,103 +202,52 @@ Function *getFunction(std::string Name);
 			return F;
 		}
 	};
-	//函数抽象语法树
-	class FunctionAST {
-		std::unique_ptr<PrototypeAST> Proto;
+
+	// CreateEntryBlockAlloca - Create an alloca instruction in the entry block of
+	// the function.  This is used for mutable variables etc.
+	static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
+		const std::string &VarName) {
+		IRBuilder<> TmpB(&TheFunction->getEntryBlock(),
+			TheFunction->getEntryBlock().begin());
+		return TmpB.CreateAlloca(Type::getInt32Ty(TheContext), nullptr,
+			VarName.c_str());
+	}
+
+	//变量声明语句
+	class DecAST : public StatAST {
+		std::vector<std::string> VarNames;
 		std::unique_ptr<StatAST> Body;
 
 	public:
-		FunctionAST(std::unique_ptr<PrototypeAST> Proto,
-			std::unique_ptr<StatAST> Body)
-			: Proto(std::move(Proto)), Body(std::move(Body)) {}
+		DecAST(std::vector<std::string> VarNames, std::unique_ptr<StatAST> Body)
+			:VarNames(std::move(VarNames)), Body(std::move(Body)) {}
 
-		Function * codegen() {
-			//可在当前模块中获取任何先前声明的函数的函数声明
-			auto &P = *Proto;
-			FunctionProtos[Proto->getName()] = std::move(Proto);
-			Function *TheFunction = getFunction(P.getName());
-			if (!TheFunction)
-				return nullptr;
+		Value *codegen() {
+			std::vector<AllocaInst *> OldBindings;
 
-			// Create a new basic block to start insertion into.
-			BasicBlock *BB = BasicBlock::Create(TheContext, "entry", TheFunction);
-			Builder.SetInsertPoint(BB);
+			Function *TheFunction = Builder.GetInsertBlock()->getParent();
 
-			// Record the function arguments in the NamedValues map.
-			NamedValues.clear();
-			for (auto &Arg : TheFunction->args())
-				NamedValues[Arg.getName()] = &Arg;
+			for (unsigned i = 0, e = VarNames.size(); i != e; ++i) {
+				const std::string &VarName = VarNames[i];
 
-			if (Value *RetVal = Body->codegen()) {
-				// Finish off the function.
-				Builder.CreateRet(RetVal);
+				Value *InitVal = ConstantInt::get(TheContext, APInt(32,0));
 
-				// Validate the generated code, checking for consistency.
-				verifyFunction(*TheFunction);
+				AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, VarName);
+				Builder.CreateStore(InitVal, Alloca);
 
-				// Run the optimizer on the function.
-				TheFPM->run(*TheFunction);
-
-				return TheFunction;
+				OldBindings.push_back(NamedValues[VarName]);
+				NamedValues[VarName] = Alloca;
 			}
 
-			// Error reading body, remove function.
-			TheFunction->eraseFromParent();
+			//Value *BodyVal = Body->codegen();
+			//if (!BodyVal)
+			//	return nullptr;
+
+			for (unsigned i = 0, e = VarNames.size(); i != e; ++i)
+				NamedValues[VarNames[i]] = OldBindings[i];
+
 			return nullptr;
 		}
-	};
-
-	//函数调用抽象语法树
-	class CallExprAST : public StatAST {
-		std::string Callee;
-		std::vector<std::unique_ptr<StatAST>> Args;
-	public:
-		CallExprAST(const std::string &Callee,
-			std::vector<std::unique_ptr<StatAST>> Args)
-			: Callee(Callee), Args(std::move(Args)) {}
-
-		Value * codegen() {
-			// Look up the name in the global module table.
-			Function *CalleeF = getFunction(Callee);
-			if (!CalleeF)
-				return LogErrorV("Unknown function referenced");
-
-			// If argument mismatch error.
-			if (CalleeF->arg_size() != Args.size())
-				return LogErrorV("Incorrect # arguments passed");
-
-			std::vector<Value *> ArgsV;
-			for (unsigned i = 0, e = Args.size(); i != e; ++i) {
-				ArgsV.push_back(Args[i]->codegen());
-				if (!ArgsV.back())
-					return nullptr;
-			}
-
-			return Builder.CreateCall(CalleeF, ArgsV, "calltmp");
-		}
-	};
-
-	//程序的抽象语法树
-	class ProgramAST {
-		std::vector<std::unique_ptr<FunctionAST>> funcs;
-
-	public:
-		ProgramAST(std::vector<std::unique_ptr<FunctionAST>> funcs)
-			:funcs(std::move(funcs)) {}
-	};
-
-	/*statement部分 -- lh*/
-	//statement 基类
-
-
-	//not mine
-	class DecAST : public StatAST
-	{
-        public:
-        Value *codegen()
-            {
-                return nullptr;
-            }
 	};
 
 	//块语句
@@ -280,7 +258,7 @@ Function *getFunction(std::string Name);
 		public:
 		Value *codegen()
 		{
-		return nullptr;
+			return nullptr;
 		}
 	};
 
@@ -386,6 +364,143 @@ Function *getFunction(std::string Name);
 
 	};
 
+	class RetStatAST : public StatAST {
+		std::unique_ptr<StatAST> Val;
+
+		public:
+			RetStatAST(std::unique_ptr<StatAST> Val)
+				: Val(std::move(Val)) {}
+
+			Value *codegen() {
+				if (Value *RetVal = Val->codegen()) {
+					return Builder.CreateRet(RetVal);
+				}
+			}
+	};
+
+	class AssStatAST : public StatAST {
+		std::unique_ptr<VariableExprAST> Name;
+		std::unique_ptr<StatAST> Expression;
+
+	public:
+		AssStatAST(std::unique_ptr<VariableExprAST> Name, std::unique_ptr<StatAST> Expression)
+			: Name(std::move(Name)), Expression(std::move(Expression)) {}
+
+		Value *codegen() {
+			Value* EValue = Expression->codegen();
+			if (!EValue)
+				return nullptr;
+
+			Value *Variable = NamedValues[Name->getName()];
+			if (!Variable)
+				return LogErrorV("Unknown variable name");
+
+			Builder.CreateStore(EValue, Variable);
+
+			return EValue;
+		}
+	};
+
+	//函数抽象语法树
+	class FunctionAST {
+		std::unique_ptr<PrototypeAST> Proto;
+		std::unique_ptr<StatAST> Body;
+
+	public:
+		FunctionAST(std::unique_ptr<PrototypeAST> Proto,
+			std::unique_ptr<StatAST> Body)
+			: Proto(std::move(Proto)), Body(std::move(Body)) {}
+
+		/*
+		* 待重构：如上
+		*/
+		Function * codegen() {
+			//可在当前模块中获取任何先前声明的函数的函数声明
+			auto &P = *Proto;
+			FunctionProtos[Proto->getName()] = std::move(Proto);
+			Function *TheFunction = getFunction(P.getName());
+			if (!TheFunction)
+				return nullptr;
+
+			// Create a new basic block to start insertion into.
+			BasicBlock *BB = BasicBlock::Create(TheContext, "entry", TheFunction);
+			Builder.SetInsertPoint(BB);
+
+			// Record the function arguments in the NamedValues map.
+			NamedValues.clear();
+			for (auto &Arg : TheFunction->args()) {
+
+				// Create an alloca for this variable.
+				AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, Arg.getName());
+
+				// Store the initial value into the alloca.
+				Builder.CreateStore(&Arg, Alloca);
+
+				// Add arguments to variable symbol table.
+				NamedValues[Arg.getName()] = Alloca;
+			}
+
+			Body->codegen();
+			//if (Value *RetVal = Body->codegen()) {
+			//	// Finish off the function.
+			//	Builder.CreateRet(RetVal);
+
+			//	// Validate the generated code, checking for consistency.
+			//	verifyFunction(*TheFunction);
+
+			//	// Run the optimizer on the function.
+			//	TheFPM->run(*TheFunction);
+
+			//	return TheFunction;
+			//}
+
+			// Error reading body, remove function.
+			/*TheFunction->eraseFromParent();*/
+			return TheFunction;
+		}
+	};
+
+	//函数调用抽象语法树
+	class CallExprAST : public StatAST {
+		std::string Callee;
+		std::vector<std::unique_ptr<StatAST>> Args;
+	public:
+		CallExprAST(const std::string &Callee,
+			std::vector<std::unique_ptr<StatAST>> Args)
+			: Callee(Callee), Args(std::move(Args)) {}
+
+		Value * codegen() {
+			// Look up the name in the global module table.
+			Function *CalleeF = getFunction(Callee);
+			if (!CalleeF)
+				return LogErrorV("Unknown function referenced");
+
+			// If argument mismatch error.
+			if (CalleeF->arg_size() != Args.size())
+				return LogErrorV("Incorrect # arguments passed");
+
+			std::vector<Value *> ArgsV;
+			for (unsigned i = 0, e = Args.size(); i != e; ++i) {
+				ArgsV.push_back(Args[i]->codegen());
+				if (!ArgsV.back())
+					return nullptr;
+			}
+
+			return Builder.CreateCall(CalleeF, ArgsV, "calltmp");
+		}
+	};
+
+
+	//程序的抽象语法树
+	class ProgramAST {
+		std::vector<std::unique_ptr<FunctionAST>> funcs;
+
+	public:
+		ProgramAST(std::vector<std::unique_ptr<FunctionAST>> funcs)
+			:funcs(std::move(funcs)) {}
+	};
+
+
 	//创建和初始化模块和传递管理器
 	static void InitializeModuleAndPassManager() {
 
@@ -396,6 +511,8 @@ Function *getFunction(std::string Name);
 		// Create a new pass manager attached to it.
 		TheFPM = llvm::make_unique<legacy::FunctionPassManager>(TheModule.get());
 
+		// Promote allocas to registers.
+		TheFPM->add(createPromoteMemoryToRegisterPass());
 		// Do simple "peephole" optimizations and bit-twiddling optzns.
 		TheFPM->add(createInstructionCombiningPass());
 		// Reassociate expressions.
