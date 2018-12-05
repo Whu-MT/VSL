@@ -4,6 +4,8 @@
 #include "Lexer.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/APSInt.h"
+#include "llvm/ADT/APInt.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
@@ -97,8 +99,25 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 			Value *V = NamedValues[Name];
 			if (!V)
 				return LogErrorV("Unknown variable name");
-			return V;
+			return Builder.CreateLoad(V, Name.c_str());
 		}
+	};
+
+	class NegExprAST : public ExprAST {
+		std::unique_ptr<ExprAST> EXP;
+
+		public:
+			NegExprAST(std::unique_ptr<ExprAST> EXP) 
+				: EXP(std::move(EXP)) {
+			}
+
+			Value * codegen() {
+				auto Value = EXP->codegen();
+				if (!Value)
+					return nullptr;
+
+				return Builder.CreateNeg(Value);
+			}
 	};
 
 	//'+','-','*','/'二元运算表达式抽象语法树
@@ -211,7 +230,7 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 			for (unsigned i = 0, e = VarNames.size(); i != e; ++i) {
 				const std::string &VarName = VarNames[i];
 
-				Value *InitVal = ConstantFP::get(TheContext, APFloat(0.0));
+				Value *InitVal = ConstantInt::get(TheContext, APInt(32,0));
 
 				AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, VarName);
 				Builder.CreateStore(InitVal, Alloca);
