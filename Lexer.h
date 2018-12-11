@@ -120,11 +120,46 @@ static int gettok()
 
 	//TEXT
 	if(LastChar == '\"')
-		do
+	{
+        IdentifierStr = "";
+        LastChar = getchar();
+        do
 		{
+            if(LastChar == '\\')
+            {
+                LastChar = getchar();
+                if(LastChar == 'n')
+                    LastChar = '\n';
+                else if(LastChar == 't')
+                    LastChar = '\t';
+                else if(LastChar == 'r')
+                    LastChar = '\r';
+                else
+                    IdentifierStr += '\\';
+            }
 			IdentifierStr += LastChar;
 			LastChar = getchar();
 		}while(LastChar != '\"');
+		LastChar = getchar();
+		return TEXT;
+	}
+
+	if(LastChar == '\\')
+    {
+        int tmp;
+        LastChar = getchar();
+        if(LastChar == 'n')
+            tmp = '\n';
+        else if(LastChar == 't')
+            tmp = '\t';
+        else if(LastChar == 'r')
+            tmp = '\r';
+        else
+            return '\\';
+        LastChar = getchar();
+
+        return tmp;
+    }
 
 	//文档结束标志
 	if(LastChar == EOF)

@@ -63,7 +63,15 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 		virtual Value *codegen() = 0;
 	};
 
-	std::unique_ptr<ExprAST> LogError(const char *Str);
+	/*statement部分 -- lh*/
+	//statement 基类
+	class StatAST {
+	public:
+		virtual ~StatAST() = default;
+		virtual Value* codegen() = 0;
+	};
+
+	std::unique_ptr<StatAST> LogError(const char *Str);
 
 	//report errors found during code generation
 	Value *LogErrorV(const char *Str) {
@@ -72,7 +80,7 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 	}
 
 	//数字抽象语法树
-	class NumberExprAST : public ExprAST {
+	class NumberExprAST : public StatAST {
 		int Val;
 
 	public:
@@ -84,7 +92,7 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 	};
 
 	//变量抽象语法树
-	class VariableExprAST : public ExprAST {
+	class VariableExprAST : public StatAST {
 		std::string Name;
 
 	public:
@@ -103,11 +111,11 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 		}
 	};
 
-	class NegExprAST : public ExprAST {
-		std::unique_ptr<ExprAST> EXP;
+	class NegExprAST : public StatAST {
+		std::unique_ptr<StatAST> EXP;
 
 		public:
-			NegExprAST(std::unique_ptr<ExprAST> EXP) 
+			NegExprAST(std::unique_ptr<StatAST> EXP)
 				: EXP(std::move(EXP)) {
 			}
 
@@ -121,13 +129,13 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 	};
 
 	//'+','-','*','/'二元运算表达式抽象语法树
-	class BinaryExprAST : public ExprAST {
+	class BinaryExprAST : public StatAST {
 		char Op;
-		std::unique_ptr<ExprAST> LHS, RHS;
+		std::unique_ptr<StatAST> LHS, RHS;
 
 	public:
-		BinaryExprAST(char Op, std::unique_ptr<ExprAST> LHS,
-			std::unique_ptr<ExprAST> RHS)
+		BinaryExprAST(char Op, std::unique_ptr<StatAST> LHS,
+			std::unique_ptr<StatAST> RHS)
 			: Op(Op), LHS(std::move(LHS)), RHS(std::move(RHS)) {}
 
 
@@ -205,14 +213,6 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 			VarName.c_str());
 	}
 
-	/*statement部分 -- lh*/
-	//statement 基类
-	class StatAST {
-	public:
-		virtual ~StatAST() = default;
-		virtual Value* codegen() = 0;
-	};
-
 	//空语句
 	class NullStatAST:public StatAST {
 	public:
@@ -221,13 +221,13 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 		}
 	};
 
-	//变量声明语句 
+	//变量声明语句
 	class DecAST : public StatAST {
 		std::vector<std::string> VarNames;
-		std::unique_ptr<ExprAST> Body;
+		std::unique_ptr<StatAST> Body;
 
 	public:
-		DecAST(std::vector<std::string> VarNames, std::unique_ptr<ExprAST> Body)
+		DecAST(std::vector<std::string> VarNames, std::unique_ptr<StatAST> Body)
 			:VarNames(std::move(VarNames)), Body(std::move(Body)) {}
 
 		Value *codegen() {
@@ -267,27 +267,62 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 		BlockStatAST(std::vector<std::unique_ptr<DecAST>> DecList, std::vector<std::unique_ptr<StatAST>> StatList)
 			:DecList(std::move(DecList)), StatList(std::move(StatList)){}
 
-		Value *codegen() {
-
+	public:
+		Value* codegen()
+		{
+			for (int i = 0; i < DecList.size(); i++)
+			{
+				DecList[i]->codegen();
+			}
+			for (int j = 0; j < StatList.size(); j++)
+			{
+				StatList[j]->codegen();
+			}
+			return nullptr;
 		}
 	};
 
-	//Text
+	//Text //暂时不用--MT
 	class TextAST {
 
 	};
 
-	class PrinStatAST : public StatAST {
+	class PrintStatAST : public StatAST {
+        std::string text;
+        std::vector<std::string> expr;
+    public:
+        PrintStatAST(std::string text, std::vector<std::string> expr):
+            text(text), expr(expr){}
+        Value *codegen()
+        {
+            std::vector<llvm::Type *> printf_arg_types;
+            printf_arg_types.push_back(Builder.getInt8Ty()->getPointerTo());
+            FunctionType * printType = FunctionType::get(
+                IntegerType::getInt32Ty(TheContext),printf_arg_types, true);
+            Function *printFunc = llvm::Function::Create(printType, llvm::Function::ExternalLinkage,
+                llvm::Twine("printf"), TheModule.get());
+            printFunc->setCallingConv(llvm::CallingConv::C);
 
+            std::vector<std::string> ArgNames;
+            FunctionProtos["printf"] = std::move(llvm::make_unique<PrototypeAST>("printf", std::move(ArgNames)));
+
+            std::vector<llvm::Value *> paramArrayRef;
+            Value *intFormat = Builder.CreateGlobalStringPtr(text);
+            Value *num = Builder.getInt32(0);
+            paramArrayRef.push_back(intFormat);
+            Builder.CreateCall(printFunc, paramArrayRef);
+
+            return num;
+        }
 	};
 
 	//IF Statement
 	class IfStatAST : public StatAST {
-		std::unique_ptr<ExprAST> Cond;
+		std::unique_ptr<StatAST> Cond;
 		std::unique_ptr<StatAST> Then, Else;
 
 	public:
-		IfStatAST(std::unique_ptr<ExprAST> Cond, std::unique_ptr<StatAST> Then,
+		IfStatAST(std::unique_ptr<StatAST> Cond, std::unique_ptr<StatAST> Then,
 			std::unique_ptr<StatAST> Else)
 			: Cond(std::move(Cond)), Then(std::move(Then)), Else(std::move(Else)) {}
 
@@ -314,7 +349,7 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 			else {
 				Builder.CreateCondBr(CondV, ThenBB, MergeBB);
 			}
-			
+
 			// Emit then value.
 			Builder.SetInsertPoint(ThenBB);
 
@@ -343,17 +378,17 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 			// Emit merge block.
 			TheFunction->getBasicBlockList().push_back(MergeBB);
 			Builder.SetInsertPoint(MergeBB);
-			
+
 			return nullptr;
 		}
 
 	};
 
 	class RetStatAST : public StatAST {
-		std::unique_ptr<ExprAST> Val;
+		std::unique_ptr<StatAST> Val;
 
 		public:
-			RetStatAST(std::unique_ptr<ExprAST> Val)
+			RetStatAST(std::unique_ptr<StatAST> Val)
 				: Val(std::move(Val)) {}
 
 			Value *codegen() {
@@ -365,10 +400,10 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 
 	class AssStatAST : public StatAST {
 		std::unique_ptr<VariableExprAST> Name;
-		std::unique_ptr<ExprAST> Expression;
+		std::unique_ptr<StatAST> Expression;
 
 	public:
-		AssStatAST(std::unique_ptr<VariableExprAST> Name, std::unique_ptr<ExprAST> Expression)
+		AssStatAST(std::unique_ptr<VariableExprAST> Name, std::unique_ptr<StatAST> Expression)
 			: Name(std::move(Name)), Expression(std::move(Expression)) {}
 
 		Value *codegen() {
@@ -446,12 +481,12 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 	};
 
 	//函数调用抽象语法树
-	class CallExprAST : public ExprAST {
+	class CallExprAST : public StatAST {
 		std::string Callee;
-		std::vector<std::unique_ptr<ExprAST>> Args;
+		std::vector<std::unique_ptr<StatAST>> Args;
 	public:
 		CallExprAST(const std::string &Callee,
-			std::vector<std::unique_ptr<ExprAST>> Args)
+			std::vector<std::unique_ptr<StatAST>> Args)
 			: Callee(Callee), Args(std::move(Args)) {}
 
 		Value * codegen() {
