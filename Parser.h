@@ -209,7 +209,7 @@ static std::unique_ptr<PrototypeAST> ParsePrototype() {
 	return llvm::make_unique<PrototypeAST>(FnName, std::move(ArgNames));
 }
 
-//function ::= FUNC prototype '{' statement '}'
+//function ::= FUNC VARIABLE '(' parameter_lst ')' statement
 static std::unique_ptr<FunctionAST> ParseFunc()
 {
 	getNextToken(); // eat FUNC.
@@ -337,7 +337,32 @@ static std::unique_ptr<StatAST> ParseAssStat() {
 	return llvm::make_unique<AssStatAST>(std::move(NameV), std::move(Expression));
 }
 
-static std::unique_ptr<StatAST> ParseStatement() {
+//Ω‚Œˆwhile”Ôæ‰
+static std::unique_ptr<StatAST> ParseWhileStat()
+{
+	getNextToken();//eat WHILE
+
+	auto E = ParseExpression();
+	if(!E)
+		return nullptr;
+	
+	if(CurTok != DO)
+		return LogErrorS("expect DO in WHILE statement");
+	getNextToken();//eat DO
+
+	auto S = ParseStatement();
+	if(!S)
+	return nullptr;
+
+	if(CurTok != DONE)
+		return LogErrorS("expect DONE in WHILE statement");
+	getNextToken();//eat DONE
+
+	return llvm::make_unique<WhileStatAST>(std::move(E), std::move(S));
+}
+
+static std::unique_ptr<StatAST> ParseStatement()
+{
 	switch (CurTok) {
 		case IF:
 			return ParseIfStat();
@@ -348,6 +373,9 @@ static std::unique_ptr<StatAST> ParseStatement() {
 			return ParseRetStat();
 		case VAR:
 			return ParseDec();
+			break;
+		case WHILE:
+			return ParseWhileStat();
 			break;
 		default:
 			auto E = ParseAssStat();
@@ -440,27 +468,9 @@ static void HandleTopLevelExpression() {
 	}
 }
 
-//program ::= definition | expression
+//program ::= function_list
 static void MainLoop() {
-
-	while (true) {
-		fprintf(stderr, "ready> ");
-		switch (CurTok) {
-			case ';': // ignore top-level semicolons.
-				getNextToken();
-				break;
-			case TOK_EOF:
-				return;
-			case FUNC:
-		 		HandleFuncDefinition();
-				break;
-			case VAR:
-
-			default:
-				HandleTopLevelExpression();
-				break;
-		}
-	}
-
+	while(CurTok != TOK_EOF)
+		HandleFuncDefinition();
 }
 #endif

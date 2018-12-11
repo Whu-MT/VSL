@@ -174,10 +174,6 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 
 		const std::string &getName() const { return Name; }
 
-		/*
-		* 待重构：VSL 中不需要 PrototypeAST
-		* VSL 中的函数声明必须要带函数体，所以没有必要将 Prototype 分离出来
-		*/
 		Function * codegen() {
 			//不允许函数重定义
 			Function *TheFunction = TheModule->getFunction(Name);
@@ -411,9 +407,6 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 			std::unique_ptr<StatAST> Body)
 			: Proto(std::move(Proto)), Body(std::move(Body)) {}
 
-		/*
-		* 待重构：如上
-		*/
 		Function * codegen() {
 			//可在当前模块中获取任何先前声明的函数的函数声明
 			auto &P = *Proto;
@@ -500,12 +493,45 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 			:funcs(std::move(funcs)) {}
 	};
 
+	class WhileStatAST:public StatAST{
+		std::unique_ptr<StatAST> Expr, Stat;
+	public:
+		WhileStatAST(std::unique_ptr<StatAST> Expr, std::unique_ptr<StatAST> Stat):
+			Expr(std::move(Expr)), Stat(std::move(Stat)){}
+		
+		Value *codegen()
+		{
+			Function *TheFunction = Builder.GetInsertBlock()->getParent();
+			BasicBlock *LoopBB = BasicBlock::Create(TheContext, "loop", TheFunction);
+			BasicBlock *AfterBB = BasicBlock::Create(TheContext, "afterLoop", TheFunction);
+
+			Value *EndCond = Expr->codegen();
+			if(!EndCond)
+				return nullptr;
+			EndCond = Builder.CreateICmpNE(EndCond, Builder.getInt32(0),
+					"loopCondIn");
+			Builder.CreateCondBr(EndCond, LoopBB, AfterBB);
+
+			Builder.SetInsertPoint(LoopBB);
+			Value *inLoopVal = Stat->codegen();
+			if(!inLoopVal)
+				return nullptr;
+			EndCond = Builder.CreateICmpNE(Expr->codegen(), 
+				Builder.getInt32(0), "loopCondOut");
+			Builder.CreateCondBr(EndCond, LoopBB, AfterBB);
+
+			Builder.SetInsertPoint(AfterBB);
+
+			return Builder.getInt32(0);
+		}
+	};
+
 
 	//创建和初始化模块和传递管理器
 	static void InitializeModuleAndPassManager() {
 
 		// Open a new module.
-		TheModule = llvm::make_unique<Module>("my cool jit", TheContext);
+		TheModule = llvm::make_unique<Module>("VSL jit", TheContext);
 		TheModule->setDataLayout(TheJIT->getTargetMachine().createDataLayout());
 
 		// Create a new pass manager attached to it.
@@ -547,18 +573,4 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 	#else
 	#define DLLEXPORT
 	#endif
-
-	// putchard - putchar that takes a double and returns 0.
-	extern "C" DLLEXPORT double putchard(double X) {
-		fputc((char)X, stderr);
-		return 0;
-	}
-
-	// printd - printf that takes a double prints it as "%f\n", returning 0.
-	extern "C" DLLEXPORT double printd(double X) {
-		fprintf(stderr, "%f\n", X);
-		return 0;
-	}
-
-
 #endif

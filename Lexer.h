@@ -34,6 +34,7 @@ enum Token
 
 static std::string IdentifierStr;
 static int NumberVal;
+static FILE *inputFile;
 
 /*
 *返回输入单词类型
@@ -44,14 +45,14 @@ static int gettok()
 
 	//过滤空格
 	while(isspace(LastChar))
-		LastChar = getchar();
+		LastChar = fgetc(inputFile);
 
 	//解析标识符:{lc_letter}({lc_letter}|{digit})*
 	if(isalpha(LastChar))
 	{
 		IdentifierStr = "";
 		IdentifierStr += LastChar;
-		while(isalnum((LastChar = getchar())))
+		while (isalnum((LastChar = fgetc(inputFile))))
 			IdentifierStr += LastChar;
 
 		if(IdentifierStr == "FUNC")
@@ -88,7 +89,7 @@ static int gettok()
 		std::string NumStr;
 		do{
 			NumStr += LastChar;
-			LastChar = getchar();
+			LastChar = fgetc(inputFile);
 		}while(isdigit(LastChar));
 
 		NumberVal = atoi(NumStr.c_str());
@@ -98,11 +99,11 @@ static int gettok()
 
 	//解析注释:"//".*
 	if(LastChar == '/')
-        if((LastChar = getchar()) == '/')
-        {
+		if ((LastChar = fgetc(inputFile)) == '/')
+		{
             do
-                LastChar = getchar();
-            while(LastChar != EOF && LastChar != '\n' && LastChar != '\r');
+				LastChar = fgetc(inputFile);
+			while(LastChar != EOF && LastChar != '\n' && LastChar != '\r');
 
             //若未到达结尾，返回下一个输入类型
             if(LastChar != EOF)
@@ -112,9 +113,9 @@ static int gettok()
         }
 
 	//赋值符号
-	if(LastChar == ':' && (LastChar = getchar()) == '=')
+	if (LastChar == ':' && (LastChar = fgetc(inputFile)) == '=')
 	{
-		LastChar = getchar();	//获取下一个字符
+		LastChar = fgetc(inputFile); //获取下一个字符
 		return ASSIGN_SYMBOL;
 	}
 
@@ -122,13 +123,13 @@ static int gettok()
 	if(LastChar == '\"')
 	{
         IdentifierStr = "";
-        LastChar = getchar();
-        do
+		LastChar = fgetc(inputFile);
+		do
 		{
             if(LastChar == '\\')
             {
-                LastChar = getchar();
-                if(LastChar == 'n')
+				LastChar = fgetc(inputFile);
+				if(LastChar == 'n')
                     LastChar = '\n';
                 else if(LastChar == 't')
                     LastChar = '\t';
@@ -138,17 +139,17 @@ static int gettok()
                     IdentifierStr += '\\';
             }
 			IdentifierStr += LastChar;
-			LastChar = getchar();
+			LastChar = fgetc(inputFile);
 		}while(LastChar != '\"');
-		LastChar = getchar();
+		LastChar = fgetc(inputFile);
 		return TEXT;
 	}
 
 	if(LastChar == '\\')
     {
         int tmp;
-        LastChar = getchar();
-        if(LastChar == 'n')
+		LastChar = fgetc(inputFile);
+		if(LastChar == 'n')
             tmp = '\n';
         else if(LastChar == 't')
             tmp = '\t';
@@ -156,9 +157,9 @@ static int gettok()
             tmp = '\r';
         else
             return '\\';
-        LastChar = getchar();
+		LastChar = fgetc(inputFile);
 
-        return tmp;
+		return tmp;
     }
 
 	//文档结束标志
@@ -167,7 +168,7 @@ static int gettok()
 
 	//以上情况均不满足，直接返回当前字符
 	int tmpChar = LastChar;
-	LastChar = getchar();
+	LastChar = fgetc(inputFile);
 
 	return tmpChar;
 }

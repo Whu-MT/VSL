@@ -1,3 +1,5 @@
+#include <cstdio>
+#include <cstdlib>
 #include "Lexer.h"
 #include "AST.h"
 #include "Parser.h"
@@ -9,32 +11,43 @@
 #include "../include/KaleidoscopeJIT.h"
 #endif
 
+void usage()
+{
+    printf("usage:./VSL file\n");
 
-int main() {
-  InitializeNativeTarget();
-  InitializeNativeTargetAsmPrinter();
-  InitializeNativeTargetAsmParser();
+    exit(EXIT_FAILURE);
+}
 
-  BinopPrecedence['+'] = 10;
-  BinopPrecedence['-'] = 10;
-  BinopPrecedence['*'] = 40;
-  BinopPrecedence['/'] = 40;
+int main(int argc, char *argv[]) {
+    if(argc != 2)
+        usage();
+    inputFile = fopen(argv[1], "r");
+    if(!inputFile){
+        printf("%s open error!\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
 
-  // Prime the first token.
-  fprintf(stderr, "ready> ");
-  getNextToken();
+    InitializeNativeTarget();
+    InitializeNativeTargetAsmPrinter();
+    InitializeNativeTargetAsmParser();
 
-  // Make the module, which holds all the code.
-  //TheModule = new Module("my cool jit", TheContext);
+    BinopPrecedence['+'] = 10;
+    BinopPrecedence['-'] = 10;
+    BinopPrecedence['*'] = 40;
+    BinopPrecedence['/'] = 40;
 
-  TheJIT = llvm::make_unique<KaleidoscopeJIT>();
-  InitializeModuleAndPassManager();
+    // Make the module, which holds all the code.
+    //TheModule = new Module("my cool jit", TheContext);
 
-  // Run the main "interpreter loop" now.
-  MainLoop();
+    TheJIT = llvm::make_unique<KaleidoscopeJIT>();
+    InitializeModuleAndPassManager();
 
-  // Print out all of the generated code.
-  TheModule->print(errs(), nullptr);
+    // Run the main "interpreter loop" now.
+    getNextToken();
+    MainLoop();
 
-  return 0;
+    // Print out all of the generated code.
+    //TheModule->print(errs(), nullptr);
+
+    return 0;
 }

@@ -1,0 +1,7 @@
+FUNC a()
+{
+	VAR a
+	a := 2
+
+	RETURN a
+}
