@@ -180,6 +180,22 @@ static std::unique_ptr<StatAST> ParseDec() {
 	return llvm::make_unique<DecAST>(std::move(varNames), std::move(Body));
 }
 
+//null_statement::=CONTINUE
+static std::unique_ptr<StatAST> ParseNullStat() {
+	getNextToken();
+	return nullptr;
+}
+
+//block::='{' declaration_list statement_list '}'
+static std::unique_ptr<StatAST> ParseBlock() {
+	if (CurTok != '{')
+	{
+		LogErrorP("Expected '{' in function");
+		return nullptr;
+	}
+	getNextToken();
+}
+
 //prototype ::= VARIABLE '(' parameter_list ')'
 static std::unique_ptr<PrototypeAST> ParsePrototype() {
 	if (CurTok != VARIABLE)
@@ -321,6 +337,8 @@ static std::unique_ptr<StatAST> ParseStatement() {
 		case VAR:
 			return ParseDec();
 			break;
+		case CONTINUE:
+			return ParseNullStat();
 		default:
 			auto E = ParseAssStat();
 			return E;
