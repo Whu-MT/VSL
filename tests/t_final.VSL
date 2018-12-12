@@ -1,0 +1,24 @@
+FUNC main()
+{
+	VAR i
+
+	i := 0
+
+	WHILE 11-i
+	DO
+	{
+		PRINT "f(", i, ")=", f(i), "\n"
+		i := i+1
+	}
+	DONE
+}
+
+FUNC f(n)
+{
+	IF n
+	THEN
+		RETURN n*f(n-1)
+	ELSE
+		RETURN 1
+	FI
+}

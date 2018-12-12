@@ -1,0 +1,7 @@
+FUNC a()
+	IF 1
+	THEN
+		PRINT "if"
+	ELSE
+		PRINT "else"
+	FI

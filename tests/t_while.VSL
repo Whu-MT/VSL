@@ -1,0 +1,5 @@
+FUNC a(x)
+	WHILE 1-x
+	DO
+		RETURN 1
+	DONE
