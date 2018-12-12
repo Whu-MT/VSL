@@ -14,10 +14,11 @@ static std::unique_ptr<StatAST> ParseExpression();
 std::unique_ptr<StatAST> LogError(const char *Str);
 static std::unique_ptr<StatAST> ParseNumberExpr();
 static std::unique_ptr<StatAST> ParseParenExpr();
-static std::unique_ptr<StatAST> ParseDec();
+static std::unique_ptr<DecAST> ParseDec();
 std::unique_ptr<StatAST> LogError(const char *Str);
 std::unique_ptr<PrototypeAST> LogErrorP(const char *Str);
 std::unique_ptr<StatAST> LogErrorS(const char *Str);
+std::unique_ptr<DecAST> LogErrorD(const char *Str);
 static std::unique_ptr<StatAST> ParseStatement();
 
 //解析如下格式的表达式：
@@ -152,14 +153,14 @@ static std::unique_ptr<StatAST> ParseNumberExpr() {
 }
 
 //declaration::=VAR variable_list
-static std::unique_ptr<StatAST> ParseDec() {
+static std::unique_ptr<DecAST> ParseDec() {
 	//eat 'VAR'
 	getNextToken();
 
 	std::vector<std::string> varNames;
 	//保证至少有一个变量的名字
 	if (CurTok != VARIABLE) {
-		return LogErrorS("expected identifier after VAR");
+		return LogErrorD("expected identifier after VAR");
 	}
 
 	while (true)
@@ -171,13 +172,44 @@ static std::unique_ptr<StatAST> ParseDec() {
 			break;
 		getNextToken();
 		if (CurTok != VARIABLE) {
-			return LogErrorS("expected identifier list after VAR");
+			return LogErrorD("expected identifier list after VAR");
 		}
 	}
 
 	auto Body = nullptr;
 
 	return llvm::make_unique<DecAST>(std::move(varNames), std::move(Body));
+}
+
+//null_statement::=CONTINUE
+static std::unique_ptr<StatAST> ParseNullStat() {
+	getNextToken();
+	return nullptr;
+}
+
+//全局变量，存储变量声明语句及其他语句，函数退出后清空
+std::vector<std::unique_ptr<DecAST>> DecList;
+std::vector<std::unique_ptr<StatAST>> StatList;
+//block::='{' declaration_list statement_list '}'
+static std::unique_ptr<StatAST> ParseBlock() {
+	getNextToken();   //eat '{'
+	if (CurTok == VAR) {
+		auto varDec = ParseDec();
+		DecList.push_back(std::move(varDec));
+	}
+	while (CurTok != '}') {
+		if (CurTok == VAR) {
+			LogErrorS("Can't declare VAR here!");
+		}
+		else if (CurTok == '{') {
+			ParseBlock();
+		}
+		auto statResult = ParseStatement();
+		StatList.push_back(std::move(statResult));
+	}
+	getNextToken();  //eat '}'
+
+	return llvm::make_unique<BlockStatAST>(std::move(DecList), std::move(StatList));
 }
 
 //prototype ::= VARIABLE '(' parameter_list ')'
@@ -374,6 +406,11 @@ static std::unique_ptr<StatAST> ParseStatement()
 		case VAR:
 			return ParseDec();
 			break;
+		case '{':
+			return ParseBlock();
+			break;
+		case CONTINUE:
+			return ParseNullStat();
 		case WHILE:
 			return ParseWhileStat();
 			break;
@@ -410,9 +447,15 @@ std::unique_ptr<StatAST> LogErrorS(const char *Str) {
 	fprintf(stderr, "Error: %s\n", Str);
 	return nullptr;
 }
+std::unique_ptr<DecAST> LogErrorD(const char *Str) {
+	fprintf(stderr, "Error: %s\n", Str);
+	return nullptr;
+}
 
 // Top-Level parsing
 static void HandleFuncDefinition() {
+	DecList.clear();
+	StatList.clear();
 	if (auto FnAST = ParseFunc()) {
 		if (auto *FnIR = FnAST->codegen()) {
 			fprintf(stderr, "Read function definition:");

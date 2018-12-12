@@ -209,6 +209,14 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 			VarName.c_str());
 	}
 
+	//空语句
+	class NullStatAST:public StatAST {
+	public:
+		Value *codegen() {
+
+		}
+	};
+
 	//变量声明语句
 	class DecAST : public StatAST {
 		std::vector<std::string> VarNames;
@@ -251,9 +259,21 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 		std::vector<std::unique_ptr<DecAST>> DecList;
 		std::vector<std::unique_ptr<StatAST>> StatList;
 
-		public:
-		Value *codegen()
+	public:
+		BlockStatAST(std::vector<std::unique_ptr<DecAST>> DecList, std::vector<std::unique_ptr<StatAST>> StatList)
+			:DecList(std::move(DecList)), StatList(std::move(StatList)){}
+
+	public:
+		Value* codegen()
 		{
+			for (int i = 0; i < DecList.size(); i++)
+			{
+				DecList[i]->codegen();
+			}
+			for (int j = 0; j < StatList.size(); j++)
+			{
+				StatList[j]->codegen();
+			}
 			return nullptr;
 		}
 	};
