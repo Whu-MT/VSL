@@ -328,8 +328,8 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 				return nullptr;
 
 			// Convert condition to a bool by comparing non-equal to 0.0.
-			CondV = Builder.CreateFCmpONE(
-				CondV, ConstantFP::get(TheContext, APFloat(0.0)), "ifcond");
+			CondV = Builder.CreateICmpNE(
+				CondV, Builder.getInt32(0), "ifcond");
 
 			Function *TheFunction = Builder.GetInsertBlock()->getParent();
 

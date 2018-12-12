@@ -358,8 +358,8 @@ static std::unique_ptr<StatAST> ParseAssStat() {
 	auto NameV = llvm::make_unique<VariableExprAST>(Name->getName());
 	if (!Name)
 		return nullptr;
-	if (CurTok != '=')
-		return LogErrorS("need =");
+	if (CurTok != ASSIGN_SYMBOL)
+		return LogErrorS("need :=");
 	getNextToken();
 
 	auto Expression = ParseExpression();
