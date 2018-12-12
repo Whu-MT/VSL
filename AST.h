@@ -247,8 +247,8 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 			//if (!BodyVal)
 			//	return nullptr;
 
-			for (unsigned i = 0, e = VarNames.size(); i != e; ++i)
-				NamedValues[VarNames[i]] = OldBindings[i];
+			/*for (unsigned i = 0, e = VarNames.size(); i != e; ++i)
+				NamedValues[VarNames[i]] = OldBindings[i];*/
 
 			return nullptr;
 		}

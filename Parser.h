@@ -406,17 +406,14 @@ static std::unique_ptr<StatAST> ParseStatement()
 		case VAR:
 			return ParseDec();
 			break;
-<<<<<<< HEAD
 		case '{':
 			return ParseBlock();
 			break;
 		case CONTINUE:
 			return ParseNullStat();
-=======
 		case WHILE:
 			return ParseWhileStat();
 			break;
->>>>>>> b637b2ffb0400227eb0884fb91d35a0f00d1a5f4
 		default:
 			auto E = ParseAssStat();
 			return E;
