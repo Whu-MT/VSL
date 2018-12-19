@@ -4,3 +4,5 @@ VSL.depend
 /bin
 /obj
 ToDo
+.vscode
+tests/VSL

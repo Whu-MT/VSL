@@ -1,4 +1,4 @@
-FUNC a()
+FUNC main()
 {
 	VAR a
 	a := 2

@@ -1,2 +1,15 @@
-FUNC a()
-	PRINT "this is a test"
+FUNC funWithValue(a)
+{
+	a:= a+1
+
+	RETURN a
+}
+
+FUNC main()
+{
+	VAR i,j
+	i := 8
+	j := 9
+	PRINT "this is a test\n","i: ",i,"\tj:",j,"\n","hope is will", " work\n"
+	PRINT "funcWithValue() returned: ", funWithValue(2)
+}

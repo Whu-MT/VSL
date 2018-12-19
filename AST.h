@@ -39,6 +39,8 @@
 using namespace llvm;
 using namespace llvm::orc;
 
+Function *printFunc;	//printf函数声明
+
 class PrototypeAST;
 Function *getFunction(std::string Name);
 static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
@@ -247,8 +249,8 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 			//if (!BodyVal)
 			//	return nullptr;
 
-			for (unsigned i = 0, e = VarNames.size(); i != e; ++i)
-				NamedValues[VarNames[i]] = OldBindings[i];
+		/* 	for (unsigned i = 0, e = VarNames.size(); i != e; ++i)
+				NamedValues[VarNames[i]] = OldBindings[i]; */
 
 			return nullptr;
 		}
@@ -285,30 +287,29 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 
 	class PrintStatAST : public StatAST {
         std::string text;
-        std::vector<std::string> expr;
-    public:
-        PrintStatAST(std::string text, std::vector<std::string> expr):
-            text(text), expr(expr){}
+		std::vector<std::unique_ptr<StatAST>> expr;
+
+	  public:
+        PrintStatAST(std::string text, std::vector<std::unique_ptr<StatAST>> expr):
+            text(text), expr(std::move(expr)){}
         Value *codegen()
         {
-            std::vector<llvm::Type *> printf_arg_types;
-            printf_arg_types.push_back(Builder.getInt8Ty()->getPointerTo());
-            FunctionType * printType = FunctionType::get(
-                IntegerType::getInt32Ty(TheContext),printf_arg_types, true);
-            Function *printFunc = llvm::Function::Create(printType, llvm::Function::ExternalLinkage,
-                llvm::Twine("printf"), TheModule.get());
-            printFunc->setCallingConv(llvm::CallingConv::C);
-
-            std::vector<std::string> ArgNames;
-            FunctionProtos["printf"] = std::move(llvm::make_unique<PrototypeAST>("printf", std::move(ArgNames)));
+			Function *TheFunction = Builder.GetInsertBlock()->getParent();
 
             std::vector<llvm::Value *> paramArrayRef;
-            Value *intFormat = Builder.CreateGlobalStringPtr(text);
-            Value *num = Builder.getInt32(0);
+            Value *intFormat = Builder.CreateGlobalStringPtr(text.c_str());
             paramArrayRef.push_back(intFormat);
-            Builder.CreateCall(printFunc, paramArrayRef);
 
-            return num;
+			for (int i = 0; i<expr.size(); i++)//auto tmp = expr.begin(); tmp != expr.end(); tmp++)
+			{
+				Value *tmpValue = expr[i]->codegen();
+				paramArrayRef.push_back(tmpValue);
+			}
+
+			Builder.CreateCall(printFunc, paramArrayRef);
+
+			Value *num = Builder.getInt32(0);//print always return 0
+			return num;
         }
 	};
 
@@ -454,21 +455,7 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 			}
 
 			Body->codegen();
-			//if (Value *RetVal = Body->codegen()) {
-			//	// Finish off the function.
-			//	Builder.CreateRet(RetVal);
 
-			//	// Validate the generated code, checking for consistency.
-			//	verifyFunction(*TheFunction);
-
-			//	// Run the optimizer on the function.
-			//	TheFPM->run(*TheFunction);
-
-			//	return TheFunction;
-			//}
-
-			// Error reading body, remove function.
-			/*TheFunction->eraseFromParent();*/
 			return TheFunction;
 		}
 	};
@@ -587,10 +574,4 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 		return nullptr;
 	}
 
-	//"Library" functions that can be "extern'd" from user code.
-	#ifdef LLVM_ON_WIN32
-	#define DLLEXPORT __declspec(dllexport)
-	#else
-	#define DLLEXPORT
-	#endif
 #endif

@@ -1,4 +1,4 @@
-FUNC a()
+FUNC main()
 	IF 1
 	THEN
 		PRINT "if"

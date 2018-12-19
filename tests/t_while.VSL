@@ -1,5 +1,7 @@
-FUNC a(x)
-	WHILE 1-x
+FUNC main()
+	WHILE 1
 	DO
-		RETURN 1
+	{
+		PRINT "1"
+	}
 	DONE

@@ -1,2 +1,10 @@
-FUNC a(x)
+FUNC fun(x)
+{
 	x := 2
+
+	RETURN x
+}
+FUNC main()
+{
+	PRINT "return value: ", fun(1)
+}

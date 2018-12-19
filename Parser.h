@@ -248,22 +248,10 @@ static std::unique_ptr<FunctionAST> ParseFunc()
 	auto Proto = ParsePrototype();
 	if (!Proto)
 		return nullptr;
-	/*if (CurTok != '{')
-	{
-		LogErrorP("Expected '{' in function");
-		return nullptr;
-	}
-	getNextToken();*/
 
 	auto E = ParseStatement();
 	if (!E)
 		return nullptr;
-	/*if (CurTok != '}')
-	{
-		LogErrorP("Expected '}' in function");
-		return nullptr;
-	}
-	getNextToken();*/
 
 	return llvm::make_unique<FunctionAST>(std::move(Proto), std::move(E));
 }
@@ -316,29 +304,32 @@ static std::unique_ptr<StatAST> ParseIfStat() {
 		std::move(Else));
 }
 
-//简单版PRINT
+//PRINT,能输出变量和函数调用的值
 static std::unique_ptr<StatAST> ParsePrintStat()
 {
     std::string text = "";
-    std::vector<std::string> expr;
-    getNextToken();//eat PRINT
+	std::vector<std::unique_ptr<StatAST>> expr;
+	getNextToken();//eat PRINT
 
     while(CurTok == VARIABLE || CurTok == TEXT)
     {
         if(CurTok == TEXT)
+        {
             text += IdentifierStr;
+            getNextToken();
+        }
         else if(CurTok == VARIABLE)//只是简单的处理了变量,函数的待处理
         {
             text += " %d ";
-            expr.push_back(IdentifierStr);
-        }
+			expr.push_back(std::move(ParseIdentifierExpr()));
+		}
 
-        getNextToken();
         if(CurTok != ',')
             break;
+        getNextToken(); //eat ','
     }
 
-    return llvm::make_unique<PrintStatAST>(text, expr);
+    return llvm::make_unique<PrintStatAST>(text, std::move(expr));
 }
 
 //解析 RETURN Statement
@@ -359,7 +350,7 @@ static std::unique_ptr<StatAST> ParseAssStat() {
 	if (!Name)
 		return nullptr;
 	if (CurTok != ASSIGN_SYMBOL)
-		return LogErrorS("need :=");
+		return LogErrorS("need := in assignment statment");
 	getNextToken();
 
 	auto Expression = ParseExpression();
@@ -377,7 +368,7 @@ static std::unique_ptr<StatAST> ParseWhileStat()
 	auto E = ParseExpression();
 	if(!E)
 		return nullptr;
-	
+
 	if(CurTok != DO)
 		return LogErrorS("expect DO in WHILE statement");
 	getNextToken();//eat DO
@@ -458,11 +449,11 @@ static void HandleFuncDefinition() {
 	StatList.clear();
 	if (auto FnAST = ParseFunc()) {
 		if (auto *FnIR = FnAST->codegen()) {
-			fprintf(stderr, "Read function definition:");
-			FnIR->print(errs());
+			//fprintf(stderr, "Read function definition:");
+			//FnIR->print(errs());
 			fprintf(stderr, "\n");
 			//TheJIT->addModule(std::move(TheModule));
-			InitializeModuleAndPassManager();
+			//InitializeModuleAndPassManager();
 		}
 	}
 	else {
@@ -511,9 +502,25 @@ static void HandleTopLevelExpression() {
 	}
 }
 
+static void DeclarePrintfFunc()
+{
+	std::vector<llvm::Type *> printf_arg_types;
+	printf_arg_types.push_back(Builder.getInt8Ty()->getPointerTo());
+	FunctionType *printType = FunctionType::get(
+		IntegerType::getInt32Ty(TheContext), printf_arg_types, true);
+	printFunc = llvm::Function::Create(printType, llvm::Function::ExternalLinkage,
+									   llvm::Twine("printf"), TheModule.get());
+	printFunc->setCallingConv(llvm::CallingConv::C);
+
+	std::vector<std::string> ArgNames;
+	FunctionProtos["printf"] = std::move(llvm::make_unique<PrototypeAST>("printf", std::move(ArgNames)));
+}
+
 //program ::= function_list
 static void MainLoop() {
+	DeclarePrintfFunc();	//声明printf函数
 	while(CurTok != TOK_EOF)
 		HandleFuncDefinition();
+	TheModule->dump();
 }
 #endif
