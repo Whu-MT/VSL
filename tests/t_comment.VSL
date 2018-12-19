@@ -1,0 +1,5 @@
+FUNC A()
+{
+	//打印字符串
+	PRINT "This is a test."
+}

@@ -1,0 +1,12 @@
+FUNC A(B)
+{
+	VAR C
+	C:=1
+	B:=B+C;
+}
+
+FUNC main()
+{
+	A(2)
+	RETURN 0
+}
