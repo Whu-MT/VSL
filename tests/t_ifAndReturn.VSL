@@ -1,0 +1,16 @@
+FUNC A(n)
+{
+	IF n
+
+	THEN
+		PRINT "Expression is true."
+	ELSE
+		PRINT "Expression is false."
+	FI
+}
+
+FUNC main()
+{
+	A(1)
+	RETURN 0
+}

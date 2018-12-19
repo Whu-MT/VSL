@@ -1,2 +1,1 @@
-FUNC a()
-	CONTINUE
+FUNC a() CONTINUE

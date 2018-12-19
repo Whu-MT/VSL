@@ -204,8 +204,13 @@ static std::unique_ptr<StatAST> ParseBlock() {
 		else if (CurTok == '{') {
 			ParseBlock();
 		}
-		auto statResult = ParseStatement();
-		StatList.push_back(std::move(statResult));
+		else if (CurTok == CONTINUE) {
+			getNextToken();
+		}
+		else {
+			auto statResult = ParseStatement();
+			StatList.push_back(std::move(statResult));
+		}
 	}
 	getNextToken();  //eat '}'
 

@@ -1,0 +1,9 @@
+FUNC A()
+{
+	VAR A
+}
+
+FUNC B()
+{
+	VAR B
+}
