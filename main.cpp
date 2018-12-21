@@ -36,18 +36,12 @@ int main(int argc, char *argv[]) {
     BinopPrecedence['*'] = 40;
     BinopPrecedence['/'] = 40;
 
-    // Make the module, which holds all the code.
-    //TheModule = new Module("my cool jit", TheContext);
-
     TheJIT = llvm::make_unique<KaleidoscopeJIT>();
     InitializeModuleAndPassManager();
 
     // Run the main "interpreter loop" now.
     getNextToken();
     MainLoop();
-
-    // Print out all of the generated code.
-    //TheModule->print(errs(), nullptr);
 
     return 0;
 }

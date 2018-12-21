@@ -187,11 +187,11 @@ static std::unique_ptr<StatAST> ParseNullStat() {
 	return nullptr;
 }
 
-//全局变量，存储变量声明语句及其他语句，函数退出后清空
-std::vector<std::unique_ptr<DecAST>> DecList;
-std::vector<std::unique_ptr<StatAST>> StatList;
 //block::='{' declaration_list statement_list '}'
 static std::unique_ptr<StatAST> ParseBlock() {
+	//存储变量声明语句及其他语句
+	std::vector<std::unique_ptr<DecAST>> DecList;
+	std::vector<std::unique_ptr<StatAST>> StatList;
 	getNextToken();   //eat '{'
 	if (CurTok == VAR) {
 		auto varDec = ParseDec();
@@ -450,16 +450,8 @@ std::unique_ptr<DecAST> LogErrorD(const char *Str) {
 
 // Top-Level parsing
 static void HandleFuncDefinition() {
-	DecList.clear();
-	StatList.clear();
 	if (auto FnAST = ParseFunc()) {
-		if (auto *FnIR = FnAST->codegen()) {
-			//fprintf(stderr, "Read function definition:");
-			//FnIR->print(errs());
-			fprintf(stderr, "\n");
-			//TheJIT->addModule(std::move(TheModule));
-			//InitializeModuleAndPassManager();
-		}
+		FnAST->codegen();
 	}
 	else {
 		// Skip token for error recovery.
@@ -467,46 +459,7 @@ static void HandleFuncDefinition() {
 	}
 }
 
-/// toplevelexpr ::= expression
-static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
-  if (auto E = ParseExpression()) {
-    // Make an anonymous proto.
-    auto Proto = llvm::make_unique<PrototypeAST>("__anon_expr",
-                                                 std::vector<std::string>());
-    return llvm::make_unique<FunctionAST>(std::move(Proto), std::move(E));
-  }
-  return nullptr;
-}
-
-static void HandleTopLevelExpression() {
-	// Evaluate a top-level expression into an anonymous function.
-	if (auto FnAST = ParseTopLevelExpr()) {
-		if (FnAST->codegen()) {
-
-			// JIT the module containing the anonymous expression, keeping a handle so
-			// we can free it later.
-			auto H = TheJIT->addModule(std::move(TheModule));
-			InitializeModuleAndPassManager();
-
-			// Search the JIT for the __anon_expr symbol.
-			auto ExprSymbol = TheJIT->findSymbol("__anon_expr");
-			assert(ExprSymbol && "Function not found");
-
-			// Get the symbol's address and cast it to the right type (takes no
-			// arguments, returns a double) so we can call it as a native function.
-			int(*FP)() = (int (*)())cantFail(ExprSymbol.getAddress());
-			fprintf(stderr, "Evaluated to %d\n", FP());
-
-			// Delete the anonymous expression module from the JIT.
-			TheJIT->removeModule(H);
-		}
-		else {
-			// Skip token for error recovery.
-			getNextToken();
-		}
-	}
-}
-
+//声明printf函数
 static void DeclarePrintfFunc()
 {
 	std::vector<llvm::Type *> printf_arg_types;
@@ -514,7 +467,7 @@ static void DeclarePrintfFunc()
 	FunctionType *printType = FunctionType::get(
 		IntegerType::getInt32Ty(TheContext), printf_arg_types, true);
 	printFunc = llvm::Function::Create(printType, llvm::Function::ExternalLinkage,
-									   llvm::Twine("printf"), TheModule.get());
+									   llvm::Twine("printf"), TheModule);
 	printFunc->setCallingConv(llvm::CallingConv::C);
 
 	std::vector<std::string> ArgNames;
@@ -523,9 +476,20 @@ static void DeclarePrintfFunc()
 
 //program ::= function_list
 static void MainLoop() {
-	DeclarePrintfFunc();	//声明printf函数
+	DeclarePrintfFunc();
 	while(CurTok != TOK_EOF)
 		HandleFuncDefinition();
 	TheModule->dump();
+	Function *main = getFunction("main");
+	if(!main)	printf("main is null");
+	std::string errStr;
+	ExecutionEngine *EE = EngineBuilder(std::move(Owner)).setErrorStr(&errStr).create();
+	if (!EE)
+	{
+		errs() <<"Failed to construct ExecutionEngine: " << errStr << "\n";
+		return;
+	}
+	std::vector<GenericValue> noarg;
+	GenericValue gv = EE->runFunction(main, noarg);
 }
 #endif

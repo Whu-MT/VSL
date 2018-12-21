@@ -1,3 +1,13 @@
+FUNC f(n)
+{
+	IF n
+	THEN
+		RETURN n*f(n-1)
+	ELSE
+		RETURN 1
+	FI
+}
+
 FUNC main()
 {
 	VAR i
@@ -11,14 +21,4 @@ FUNC main()
 		i := i+1
 	}
 	DONE
-}
-
-FUNC f(n)
-{
-	IF n
-	THEN
-		RETURN n*f(n-1)
-	ELSE
-		RETURN 1
-	FI
 }

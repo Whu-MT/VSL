@@ -20,6 +20,9 @@
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVN.h"
+#include "llvm/ExecutionEngine/ExecutionEngine.h"
+#include "llvm/ExecutionEngine/GenericValue.h"
+#include "llvm/ExecutionEngine/MCJIT.h"
 #include <algorithm>
 #include <cassert>
 #include <cctype>
@@ -49,7 +52,8 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 	//IR 部分
 	static LLVMContext TheContext;
 	static IRBuilder<> Builder(TheContext);
-	static std::unique_ptr<Module> TheModule;
+	std::unique_ptr<Module> Owner(new Module("test", TheContext));
+	static /*std::unique_ptr<Module>*/Module * TheModule;
 
 	static std::map<std::string, AllocaInst *> NamedValues;
 
@@ -190,7 +194,7 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 
 			// 注册该函数
 			Function *F =
-				Function::Create(FT, Function::ExternalLinkage, Name, TheModule.get());
+				Function::Create(FT, Function::ExternalLinkage, Name, TheModule);
 
 			// 为函数参数命名
 			unsigned Idx = 0;
@@ -245,10 +249,6 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 				NamedValues[VarName] = Alloca;
 			}
 
-			//Value *BodyVal = Body->codegen();
-			//if (!BodyVal)
-			//	return nullptr;
-
 			return nullptr;
 		}
 	};
@@ -273,7 +273,7 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 			{
 				StatList[j]->codegen();
 			}
-			return nullptr;
+			return Builder.getInt32(0); //block always return 0
 		}
 	};
 
@@ -453,6 +453,9 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 
 			Body->codegen();
 
+			Builder.CreateRet(Builder.getInt32(0)); //如果函数没有返回语句，添加个RETURN 0
+			verifyFunction(*TheFunction);
+
 			return TheFunction;
 		}
 	};
@@ -535,11 +538,11 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 	static void InitializeModuleAndPassManager() {
 
 		// Open a new module.
-		TheModule = llvm::make_unique<Module>("VSL jit", TheContext);
+		TheModule = Owner.get();//llvm::make_unique<Module>("VSL jit", TheContext);
 		TheModule->setDataLayout(TheJIT->getTargetMachine().createDataLayout());
 
 		// Create a new pass manager attached to it.
-		TheFPM = llvm::make_unique<legacy::FunctionPassManager>(TheModule.get());
+		TheFPM = llvm::make_unique<legacy::FunctionPassManager>(TheModule);
 
 		// Promote allocas to registers.
 		TheFPM->add(createPromoteMemoryToRegisterPass());
