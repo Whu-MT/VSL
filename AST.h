@@ -386,8 +386,13 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 				: Val(std::move(Val)) {}
 
 			Value *codegen() {
+				Function *TheFunction = Builder.GetInsertBlock()->getParent();
 				if (Value *RetVal = Val->codegen()) {
-					return Builder.CreateRet(RetVal);
+					Builder.CreateRet(RetVal);
+					BasicBlock *afterRet = BasicBlock::Create(TheContext, "afterReturn", TheFunction);
+					Builder.SetInsertPoint(afterRet);
+
+					return RetVal;
 				}
 			}
 	};
