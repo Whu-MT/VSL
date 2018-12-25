@@ -1,2 +1,2 @@
-FUNC a(x)
+FUNC main()
 	VAR y

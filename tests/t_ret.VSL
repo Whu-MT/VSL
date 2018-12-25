@@ -1,2 +1,2 @@
-FUNC a()
+FUNC main()
 	RETURN 0

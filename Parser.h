@@ -479,7 +479,16 @@ static void MainLoop() {
 	DeclarePrintfFunc();
 	while(CurTok != TOK_EOF)
 		HandleFuncDefinition();
-	TheModule->dump();
+
+	if (emitIR)
+	{
+		std::string IRstr;
+		FILE *IRFile = fopen("IRCode.ll", "w");
+		raw_string_ostream *rawStr = new raw_string_ostream(IRstr);
+		TheModule->print(*rawStr, nullptr);
+		fprintf(IRFile, "%s\n", rawStr->str().c_str());
+	}
+
 	Function *main = getFunction("main");
 	if(!main)	printf("main is null");
 	std::string errStr;

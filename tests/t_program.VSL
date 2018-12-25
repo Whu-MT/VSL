@@ -3,7 +3,7 @@ FUNC A()
 	VAR A
 }
 
-FUNC B()
+FUNC main()
 {
 	VAR B
 }

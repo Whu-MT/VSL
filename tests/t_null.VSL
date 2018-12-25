@@ -1,1 +1,7 @@
-FUNC a() CONTINUE
+FUNC main()
+{
+    IF 1
+    THEN CONTINUE
+    ELSE PRINT "in else"
+    FI
+}
