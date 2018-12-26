@@ -21,18 +21,18 @@ std::unique_ptr<StatAST> LogErrorS(const char *Str);
 std::unique_ptr<DecAST> LogErrorD(const char *Str);
 static std::unique_ptr<StatAST> ParseStatement();
 
-//½âÎöÈçÏÂ¸ñÊ½µÄ±í´ïÊ½£º
+//è§£æå¦‚ä¸‹æ ¼å¼çš„è¡¨è¾¾å¼ï¼š
 // identifer || identifier(expression list)
 static std::unique_ptr<StatAST> ParseIdentifierExpr() {
 	std::string IdName = IdentifierStr;
 
 	getNextToken();
 
-	//½âÎö³É±äÁ¿±í´ïÊ½
+	//è§£ææˆå˜é‡è¡¨è¾¾å¼
 	if (CurTok != '(')
 		return llvm::make_unique<VariableExprAST>(IdName);
 
-	// ½âÎö³Éº¯Êıµ÷ÓÃ±í´ïÊ½
+	// è§£ææˆå‡½æ•°è°ƒç”¨è¡¨è¾¾å¼
 	getNextToken();
 	std::vector<std::unique_ptr<StatAST>> Args;
 	if (CurTok != ')') {
@@ -56,7 +56,7 @@ static std::unique_ptr<StatAST> ParseIdentifierExpr() {
 	return llvm::make_unique<CallExprAST>(IdName, std::move(Args));
 }
 
-//½âÎöÈ¡·´±í´ïÊ½
+//è§£æå–åè¡¨è¾¾å¼
 static std::unique_ptr<StatAST> ParseNegExpr() {
 	getNextToken();
 	std::unique_ptr<StatAST> Exp = ParseExpression();
@@ -66,7 +66,7 @@ static std::unique_ptr<StatAST> ParseNegExpr() {
 	return llvm::make_unique<NegExprAST>(std::move(Exp));
 }
 
-//½âÎö³É ±êÊ¶·û±í´ïÊ½¡¢ÕûÊı±í´ïÊ½¡¢À¨ºÅ±í´ïÊ½ÖĞµÄÒ»ÖÖ
+//è§£ææˆ æ ‡è¯†ç¬¦è¡¨è¾¾å¼ã€æ•´æ•°è¡¨è¾¾å¼ã€æ‹¬å·è¡¨è¾¾å¼ä¸­çš„ä¸€ç§
 static std::unique_ptr<StatAST> ParsePrimary() {
 	switch (CurTok) {
 	default:
@@ -94,34 +94,34 @@ static int GetTokPrecedence() {
   return TokPrec;
 }
 
-//½âÎö¶şÔª±í´ïÊ½
-//²ÎÊı £º
-//ExprPrec ×ó²¿ÔËËã·ûÓÅÏÈ¼¶
-//LHS ×ó²¿²Ù×÷Êı
-// µİ¹éµÃµ½¿ÉÒÔ½áºÏµÄÓÒ²¿£¬Ñ­»·µÃµ½Ò»¸öÕûÌå¶şÔª±í´ïÊ½
+//è§£æäºŒå…ƒè¡¨è¾¾å¼
+//å‚æ•° ï¼š
+//ExprPrec å·¦éƒ¨è¿ç®—ç¬¦ä¼˜å…ˆçº§
+//LHS å·¦éƒ¨æ“ä½œæ•°
+// é€’å½’å¾—åˆ°å¯ä»¥ç»“åˆçš„å³éƒ¨ï¼Œå¾ªç¯å¾—åˆ°ä¸€ä¸ªæ•´ä½“äºŒå…ƒè¡¨è¾¾å¼
 static std::unique_ptr<StatAST> ParseBinOpRHS(int ExprPrec,
 	std::unique_ptr<StatAST> LHS) {
 
 	while (true) {
 		int TokPrec = GetTokPrecedence();
 
-		// µ±ÓÒ²¿Ã»ÓĞÔËËã·û»òÓÒ²¿ÔËËã·ûÓÅÏÈ¼¶Ğ¡ÓÚ×ó²¿ÔËËã·ûÓÅÏÈ¼¶Ê± ÍË³öÑ­»·ºÍµİ¹é
+		// å½“å³éƒ¨æ²¡æœ‰è¿ç®—ç¬¦æˆ–å³éƒ¨è¿ç®—ç¬¦ä¼˜å…ˆçº§å°äºå·¦éƒ¨è¿ç®—ç¬¦ä¼˜å…ˆçº§æ—¶ é€€å‡ºå¾ªç¯å’Œé€’å½’
 		if (TokPrec < ExprPrec)
 			return LHS;
 
 		if(CurTok == '}')
 			return LHS;
 
-		// ±£´æ×ó²¿ÔËËã·û
+		// ä¿å­˜å·¦éƒ¨è¿ç®—ç¬¦
 		int BinOp = CurTok;
 		getNextToken();
 
-		// µÃµ½ÓÒ²¿±í´ïÊ½
+		// å¾—åˆ°å³éƒ¨è¡¨è¾¾å¼
 		auto RHS = ParsePrimary();
 		if (!RHS)
 			return nullptr;
 
-		// Èç¹û¸ÃÓÒ²¿±í´ïÊ½²»Óë¸Ã×ó²¿±í´ïÊ½½áºÏ ÄÇÃ´µİ¹éµÃµ½ÓÒ²¿±í´ïÊ½
+		// å¦‚æœè¯¥å³éƒ¨è¡¨è¾¾å¼ä¸ä¸è¯¥å·¦éƒ¨è¡¨è¾¾å¼ç»“åˆ é‚£ä¹ˆé€’å½’å¾—åˆ°å³éƒ¨è¡¨è¾¾å¼
 		int NextPrec = GetTokPrecedence();
 		if (TokPrec < NextPrec) {
 			RHS = ParseBinOpRHS(TokPrec + 1, std::move(RHS));
@@ -129,13 +129,13 @@ static std::unique_ptr<StatAST> ParseBinOpRHS(int ExprPrec,
 				return nullptr;
 		}
 
-		// ½«×óÓÒ²¿½áºÏ³ÉĞÂµÄ×ó²¿
+		// å°†å·¦å³éƒ¨ç»“åˆæˆæ–°çš„å·¦éƒ¨
 		LHS = llvm::make_unique<BinaryExprAST>(BinOp, std::move(LHS),
 			std::move(RHS));
 	}
 }
 
-// ½âÎöµÃµ½±í´ïÊ½
+// è§£æå¾—åˆ°è¡¨è¾¾å¼
 static std::unique_ptr<StatAST> ParseExpression() {
 	auto LHS = ParsePrimary();
 	if (!LHS)
@@ -147,7 +147,7 @@ static std::unique_ptr<StatAST> ParseExpression() {
 // numberexpr ::= number
 static std::unique_ptr<StatAST> ParseNumberExpr() {
 	auto Result = llvm::make_unique<NumberExprAST>(NumberVal);
-	//ÂÔ¹ıÊı×Ö»ñÈ¡ÏÂÒ»¸öÊäÈë
+	//ç•¥è¿‡æ•°å­—è·å–ä¸‹ä¸€ä¸ªè¾“å…¥
 	getNextToken();
 	return std::move(Result);
 }
@@ -158,7 +158,7 @@ static std::unique_ptr<DecAST> ParseDec() {
 	getNextToken();
 
 	std::vector<std::string> varNames;
-	//±£Ö¤ÖÁÉÙÓĞÒ»¸ö±äÁ¿µÄÃû×Ö
+	//ä¿è¯è‡³å°‘æœ‰ä¸€ä¸ªå˜é‡çš„åå­—
 	if (CurTok != VARIABLE) {
 		return LogErrorD("expected identifier after VAR");
 	}
@@ -189,7 +189,7 @@ static std::unique_ptr<StatAST> ParseNullStat() {
 
 //block::='{' declaration_list statement_list '}'
 static std::unique_ptr<StatAST> ParseBlock() {
-	//´æ´¢±äÁ¿ÉùÃ÷Óï¾ä¼°ÆäËûÓï¾ä
+	//å­˜å‚¨å˜é‡å£°æ˜è¯­å¥åŠå…¶ä»–è¯­å¥
 	std::vector<std::unique_ptr<DecAST>> DecList;
 	std::vector<std::unique_ptr<StatAST>> StatList;
 	getNextToken();   //eat '{'
@@ -261,9 +261,9 @@ static std::unique_ptr<FunctionAST> ParseFunc()
 	return llvm::make_unique<FunctionAST>(std::move(Proto), std::move(E));
 }
 
-//½âÎöÀ¨ºÅÖĞµÄ±í´ïÊ½
+//è§£ææ‹¬å·ä¸­çš„è¡¨è¾¾å¼
 static std::unique_ptr<StatAST> ParseParenExpr() {
-	// ¹ıÂË'('
+	// è¿‡æ»¤'('
 	getNextToken();
 	auto V = ParseExpression();
 	if (!V)
@@ -271,12 +271,12 @@ static std::unique_ptr<StatAST> ParseParenExpr() {
 
 	if (CurTok != ')')
 		return LogError("expected ')'");
-	// ¹ıÂË')'
+	// è¿‡æ»¤')'
 	getNextToken();
 	return V;
 }
 
-//½âÎö IF Statement
+//è§£æ IF Statement
 static std::unique_ptr<StatAST> ParseIfStat() {
 	getNextToken(); // eat the IF.
 
@@ -309,24 +309,25 @@ static std::unique_ptr<StatAST> ParseIfStat() {
 		std::move(Else));
 }
 
-//PRINT,ÄÜÊä³ö±äÁ¿ºÍº¯Êıµ÷ÓÃµÄÖµ
+//PRINT,èƒ½è¾“å‡ºå˜é‡å’Œå‡½æ•°è°ƒç”¨çš„å€¼
 static std::unique_ptr<StatAST> ParsePrintStat()
 {
     std::string text = "";
 	std::vector<std::unique_ptr<StatAST>> expr;
 	getNextToken();//eat PRINT
 
-    while(CurTok == VARIABLE || CurTok == TEXT)
+    while(CurTok == VARIABLE || CurTok == TEXT || CurTok == '('
+            || CurTok == '-' || CurTok == INTEGER)
     {
         if(CurTok == TEXT)
         {
             text += IdentifierStr;
             getNextToken();
         }
-        else if(CurTok == VARIABLE)//Ö»ÊÇ¼òµ¥µÄ´¦ÀíÁË±äÁ¿,º¯ÊıµÄ´ı´¦Àí
+        else
         {
             text += " %d ";
-			expr.push_back(std::move(ParseIdentifierExpr()));
+			expr.push_back(std::move(ParseExpression()));
 		}
 
         if(CurTok != ',')
@@ -337,7 +338,7 @@ static std::unique_ptr<StatAST> ParsePrintStat()
     return llvm::make_unique<PrintStatAST>(text, std::move(expr));
 }
 
-//½âÎö RETURN Statement
+//è§£æ RETURN Statement
 static std::unique_ptr<StatAST> ParseRetStat() {
 	getNextToken();
 	auto Val = ParseExpression();
@@ -347,7 +348,7 @@ static std::unique_ptr<StatAST> ParseRetStat() {
 	return llvm::make_unique<RetStatAST>(std::move(Val));
 }
 
-//½âÎö ¸³ÖµÓï¾ä
+//è§£æ èµ‹å€¼è¯­å¥
 static std::unique_ptr<StatAST> ParseAssStat() {
 	auto a = ParseIdentifierExpr();
 	VariableExprAST* Name = (VariableExprAST*)a.get();
@@ -365,7 +366,7 @@ static std::unique_ptr<StatAST> ParseAssStat() {
 	return llvm::make_unique<AssStatAST>(std::move(NameV), std::move(Expression));
 }
 
-//½âÎöwhileÓï¾ä
+//è§£æwhileè¯­å¥
 static std::unique_ptr<StatAST> ParseWhileStat()
 {
 	getNextToken();//eat WHILE
@@ -416,12 +417,12 @@ static std::unique_ptr<StatAST> ParseStatement()
 	}
 }
 
-//½âÎö³ÌĞò½á¹¹
+//è§£æç¨‹åºç»“æ„
 static std::unique_ptr<ProgramAST> ParseProgramAST() {
-	//½ÓÊÜ³ÌĞòÖĞº¯ÊıµÄÓï·¨Ê÷
+	//æ¥å—ç¨‹åºä¸­å‡½æ•°çš„è¯­æ³•æ ‘
 	std::vector<std::unique_ptr<FunctionAST>> Functions;
 
-	//Ñ­»·½âÎö³ÌĞòÖĞËùÓĞº¯Êı
+	//å¾ªç¯è§£æç¨‹åºä¸­æ‰€æœ‰å‡½æ•°
 	while (CurTok != TOK_EOF) {
 		auto Func=ParseFunc();
 		Functions.push_back(std::move(Func));
@@ -430,7 +431,7 @@ static std::unique_ptr<ProgramAST> ParseProgramAST() {
 	return llvm::make_unique<ProgramAST>(std::move(Functions));
 }
 
-//´íÎóĞÅÏ¢´òÓ¡
+//é”™è¯¯ä¿¡æ¯æ‰“å°
 std::unique_ptr<StatAST> LogError(const char *Str) {
 	fprintf(stderr, "Error: %s\n", Str);
 	return nullptr;
@@ -459,7 +460,7 @@ static void HandleFuncDefinition() {
 	}
 }
 
-//ÉùÃ÷printfº¯Êı
+//å£°æ˜printfå‡½æ•°
 static void DeclarePrintfFunc()
 {
 	std::vector<llvm::Type *> printf_arg_types;
@@ -489,16 +490,20 @@ static void MainLoop() {
 		fprintf(IRFile, "%s\n", rawStr->str().c_str());
 	}
 
-	Function *main = getFunction("main");
-	if(!main)	printf("main is null");
-	std::string errStr;
-	ExecutionEngine *EE = EngineBuilder(std::move(Owner)).setErrorStr(&errStr).create();
-	if (!EE)
+	if(!emitObj)
 	{
-		errs() <<"Failed to construct ExecutionEngine: " << errStr << "\n";
-		return;
+		Function *main = getFunction("main");
+		if (!main)
+			printf("main is null");
+		std::string errStr;
+		ExecutionEngine *EE = EngineBuilder(std::move(Owner)).setErrorStr(&errStr).create();
+		if (!EE)
+		{
+			errs() << "Failed to construct ExecutionEngine: " << errStr << "\n";
+			return;
+		}
+		std::vector<GenericValue> noarg;
+		GenericValue gv = EE->runFunction(main, noarg);
 	}
-	std::vector<GenericValue> noarg;
-	GenericValue gv = EE->runFunction(main, noarg);
 }
 #endif

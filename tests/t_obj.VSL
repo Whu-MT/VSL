@@ -1,0 +1,4 @@
+FUNC sum(x, y)
+{
+    RETURN x + y
+}
