@@ -11,6 +11,6 @@ FUNC A(n)
 
 FUNC main()
 {
-	PRINT "\n", A(1)
+	PRINT A(1),"\n"
 	RETURN 0
 }

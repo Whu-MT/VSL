@@ -224,7 +224,7 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 	class NullStatAST:public StatAST {
 	public:
 		Value *codegen() {
-
+            return Builder.getInt32(0); //null always return 0
 		}
 	};
 
@@ -515,7 +515,7 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 	public:
 		WhileStatAST(std::unique_ptr<StatAST> Expr, std::unique_ptr<StatAST> Stat):
 			Expr(std::move(Expr)), Stat(std::move(Stat)){}
-		
+
 		Value *codegen()
 		{
 			Function *TheFunction = Builder.GetInsertBlock()->getParent();
@@ -533,7 +533,7 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 			Value *inLoopVal = Stat->codegen();
 			if(!inLoopVal)
 				return nullptr;
-			EndCond = Builder.CreateICmpNE(Expr->codegen(), 
+			EndCond = Builder.CreateICmpNE(Expr->codegen(),
 				Builder.getInt32(0), "loopCondOut");
 			Builder.CreateCondBr(EndCond, LoopBB, AfterBB);
 

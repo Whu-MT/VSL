@@ -2,6 +2,7 @@ FUNC main()
 {
 	VAR a
 	a := 2
+	PRINT a,"\n"
 
 	RETURN a
 }

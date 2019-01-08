@@ -1,7 +1,15 @@
 FUNC main()
-	WHILE 1
+{
+	VAR i
+	i:=3
+	
+	WHILE i
 	DO
 	{
-		PRINT "1"
+		PRINT i,"\t"
+		i := i - 1
 	}
 	DONE
+
+	PRINT "\n"
+}

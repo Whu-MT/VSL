@@ -184,7 +184,7 @@ static std::unique_ptr<DecAST> ParseDec() {
 //null_statement::=CONTINUE
 static std::unique_ptr<StatAST> ParseNullStat() {
 	getNextToken();
-	return nullptr;
+	return llvm::make_unique<NullStatAST>();
 }
 
 //block::='{' declaration_list statement_list '}'

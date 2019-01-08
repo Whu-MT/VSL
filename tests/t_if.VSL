@@ -1,7 +1,7 @@
 FUNC main()
 	IF 1
 	THEN
-		PRINT "if"
+		PRINT "if\n"
 	ELSE
-		PRINT "else"
+		PRINT "else\n"
 	FI

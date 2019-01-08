@@ -11,5 +11,5 @@ FUNC main()
 	i := 8
 	j := 9
 	PRINT "this is a test\n","i: ",i,"\tj:",j,"\n","hope is will", " work\n"
-	PRINT "funcWithValue() returned: ", funWithValue(2)
+	PRINT "funcWithValue() returned: ", funWithValue(2),"\n"
 }

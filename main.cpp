@@ -17,10 +17,10 @@ static char *inputFileName;
 
 void usage()
 {
-    printf("usage: VSL inputFile [-r] [-h]\n");
-    printf("-r emit IR code to IRcode.ll file\n");
-    printf("-h show help information\n");
-    printf("-obj emit obj file of the input file\n");
+    printf("usage: VSL inputFile [-r] [-h] [-obj]\n");
+    printf("-r: emit IR code to IRcode.ll file\n");
+    printf("-h: show help information\n");
+    printf("-obj: emit obj file of the input file\n");
 
     exit(EXIT_FAILURE);
 }

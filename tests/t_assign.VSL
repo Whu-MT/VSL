@@ -6,5 +6,5 @@ FUNC fun(x)
 }
 FUNC main()
 {
-	PRINT "return value: ", fun(1)
+	PRINT "return value: ", fun(1),"\n"
 }
